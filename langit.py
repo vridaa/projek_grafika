@@ -16,6 +16,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     def __init__(self, parent=None):
         super(SceneGLWidget, self).__init__(parent)
         self.setMinimumSize(400, 400)
+        self.setFocusPolicy(Qt.StrongFocus)  # Enable keyboard focus
         self.current_scene = 'none'
         self.rotation_x = 0  # Rotasi X
         self.rotation_y = 0  # Rotasi Y
@@ -206,6 +207,31 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         else:
             self.scale /= zoom_factor
         self.scaleChanged.emit(self.scale)
+        self.update()
+
+    def keyPressEvent(self, event):
+        """Handle keyboard input for rotation"""
+        rotation_step = 5.0  # Jumlah derajat untuk setiap rotasi
+        
+        if event.key() == Qt.Key_Left:
+            self.rotation_y = (self.rotation_y - rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        elif event.key() == Qt.Key_Right:
+            self.rotation_y = (self.rotation_y + rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        elif event.key() == Qt.Key_Up:
+            self.rotation_x = (self.rotation_x - rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        elif event.key() == Qt.Key_Down:
+            self.rotation_x = (self.rotation_x + rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        elif event.key() == Qt.Key_Q: # searah jarum jam
+            self.rotation_z = (self.rotation_z - rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        elif event.key() == Qt.Key_E: # berlawanan arah jarum jam
+            self.rotation_z = (self.rotation_z + rotation_step) % 360
+            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        
         self.update()
 
     # Transformation methods
