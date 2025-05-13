@@ -210,9 +210,11 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.update()
 
     def keyPressEvent(self, event):
-        """Handle keyboard input for rotation"""
+        """Handle keyboard input for rotation and scaling"""
         rotation_step = 5.0  # Jumlah derajat untuk setiap rotasi
+        scale_step = 0.1     # Jumlah perubahan untuk scaling
         
+        # Rotation controls
         if event.key() == Qt.Key_Left:
             self.rotation_y = (self.rotation_y - rotation_step) % 360
             self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
@@ -225,12 +227,19 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         elif event.key() == Qt.Key_Down:
             self.rotation_x = (self.rotation_x + rotation_step) % 360
             self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
-        elif event.key() == Qt.Key_Q: # searah jarum jam
+        elif event.key() == Qt.Key_Q:
             self.rotation_z = (self.rotation_z - rotation_step) % 360
             self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
-        elif event.key() == Qt.Key_E: # berlawanan arah jarum jam
+        elif event.key() == Qt.Key_E:
             self.rotation_z = (self.rotation_z + rotation_step) % 360
             self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        # Scaling controls
+        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:  # Zoom in
+            self.scale = min(2.0, self.scale + scale_step)
+            self.scaleChanged.emit(self.scale)
+        elif event.key() == Qt.Key_Minus:  # Zoom out
+            self.scale = max(0.1, self.scale - scale_step)
+            self.scaleChanged.emit(self.scale)
         
         self.update()
 
