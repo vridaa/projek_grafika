@@ -210,9 +210,10 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.update()
 
     def keyPressEvent(self, event):
-        """Handle keyboard input for rotation and scaling"""
+        """Handle keyboard input for rotation, scaling, and translation"""
         rotation_step = 5.0  # Jumlah derajat untuk setiap rotasi
         scale_step = 0.1     # Jumlah perubahan untuk scaling
+        translation_step = 0.1  # Jumlah perubahan untuk translasi
         
         # Rotation controls
         if event.key() == Qt.Key_Left:
@@ -240,6 +241,19 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         elif event.key() == Qt.Key_Minus:  # Zoom out
             self.scale = max(0.1, self.scale - scale_step)
             self.scaleChanged.emit(self.scale)
+        # Translation controls
+        elif event.key() == Qt.Key_A:  # Move left
+            self.translation_x -= translation_step
+            self.translationChanged.emit(self.translation_x, self.translation_y)
+        elif event.key() == Qt.Key_D:  # Move right
+            self.translation_x += translation_step
+            self.translationChanged.emit(self.translation_x, self.translation_y)
+        elif event.key() == Qt.Key_W:  # Move up
+            self.translation_y += translation_step
+            self.translationChanged.emit(self.translation_x, self.translation_y)
+        elif event.key() == Qt.Key_S:  # Move down
+            self.translation_y -= translation_step
+            self.translationChanged.emit(self.translation_x, self.translation_y)
         
         self.update()
 
