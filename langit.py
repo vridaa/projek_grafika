@@ -221,13 +221,112 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         GL.glEnd()
 
-    # def draw_rainbow(self):
+    def draw_rainbow(self):
+        """Draw a 2D rainbow using concentric arcs with different colors"""
+        colors = [
+            (1.0, 0.0, 0.0),  # Red
+            (1.0, 0.5, 0.0),  # Orange
+            (1.0, 1.0, 0.0),  # Yellow
+            (0.0, 1.0, 0.0),  # Green
+            (0.0, 0.0, 1.0),  # Blue
+            (0.5, 0.0, 1.0),  # Indigo
+            (0.7, 0.0, 1.0)   # Violet
+        ]
         
-    #     GL.glEnd()
+        start_radius = 0.5  # Ubah dari 0.3 menjadi 0.5
+        thickness = 0.15    # Ubah dari 0.1 menjadi 0.15
+        segments = 50
+        start_angle = math.pi / 8  # Ubah dari pi/6 (30°) menjadi pi/8 (22.5°)
+        end_angle = math.pi - start_angle
+        
+        for i, color in enumerate(colors):
+            radius = start_radius + (i * thickness)
+            GL.glColor3f(*color)
+            
+            GL.glBegin(GL.GL_QUAD_STRIP)
+            for j in range(segments + 1):
+                theta = start_angle + (end_angle - start_angle) * j / segments
+                
+                # Inner vertex
+                x1 = radius * math.cos(theta)
+                y1 = radius * math.sin(theta)
+                GL.glVertex2f(x1, y1)
+                
+                # Outer vertex
+                x2 = (radius + thickness) * math.cos(theta)
+                y2 = (radius + thickness) * math.sin(theta)
+                GL.glVertex2f(x2, y2)
+                
+            GL.glEnd()
 
-    # def draw_rocket(self):
-        
-    #     GL.glEnd()
+    def draw_rocket(self):
+        """Draw a 2D rocket using OpenGL primitives"""
+        # Badan roket (trapesium)
+        GL.glBegin(GL.GL_POLYGON)
+        GL.glColor3f(0.8, 0.8, 0.8)  # Light gray
+        GL.glVertex2f(-0.1, -0.5)   # Kiri bawah
+        GL.glVertex2f(0.1, -0.5)    # Kanan bawah
+        GL.glVertex2f(0.2, 0.3)     # Kanan atas
+        GL.glVertex2f(-0.2, 0.3)    # Kiri atas
+        GL.glEnd()
+
+        # Kepala roket (segitiga)
+        GL.glBegin(GL.GL_TRIANGLES)
+        GL.glColor3f(1.0, 0.0, 0.0)  # Red
+        GL.glVertex2f(-0.2, 0.3)    # Kiri
+        GL.glVertex2f(0.2, 0.3)     # Kanan
+        GL.glVertex2f(0.0, 0.7)     # Puncak
+        GL.glEnd()
+
+        # Sayap kiri
+        GL.glBegin(GL.GL_TRIANGLES)
+        GL.glColor3f(0.6, 0.6, 0.6)  # Dark gray
+        GL.glVertex2f(-0.1, -0.3)   # Atas
+        GL.glVertex2f(-0.1, -0.5)   # Bawah
+        GL.glVertex2f(-0.3, -0.5)   # Ujung sayap
+        GL.glEnd()
+
+        # Sayap kanan
+        GL.glBegin(GL.GL_TRIANGLES)
+        GL.glColor3f(0.6, 0.6, 0.6)  # Dark gray
+        GL.glVertex2f(0.1, -0.3)    # Atas
+        GL.glVertex2f(0.1, -0.5)    # Bawah
+        GL.glVertex2f(0.3, -0.5)    # Ujung sayap
+        GL.glEnd()
+
+        # Jendela roket (lingkaran)
+        self.draw_circle(0.0, 0.0, 0.08, (0.2, 0.6, 1.0))  # Light blue window
+
+        # Api roket
+        GL.glBegin(GL.GL_TRIANGLES)
+        # Api tengah (merah)
+        GL.glColor3f(1.0, 0.0, 0.0)  # Red
+        GL.glVertex2f(-0.1, -0.5)
+        GL.glVertex2f(0.1, -0.5)
+        GL.glVertex2f(0.0, -0.8)
+        # Api kiri (kuning)
+        GL.glColor3f(1.0, 1.0, 0.0)  # Yellow
+        GL.glVertex2f(-0.15, -0.5)
+        GL.glVertex2f(-0.05, -0.5)
+        GL.glVertex2f(-0.1, -0.7)
+        # Api kanan (kuning)
+        GL.glVertex2f(0.05, -0.5)
+        GL.glVertex2f(0.15, -0.5)
+        GL.glVertex2f(0.1, -0.7)
+        GL.glEnd()
+
+    def draw_circle(self, x, y, radius, color):
+        """Helper method to draw a filled circle"""
+        GL.glColor3f(*color)
+        GL.glBegin(GL.GL_TRIANGLE_FAN)
+        GL.glVertex2f(x, y)
+        segments = 32
+        for i in range(segments + 1):
+            theta = 2.0 * math.pi * i / segments
+            dx = radius * math.cos(theta)
+            dy = radius * math.sin(theta)
+            GL.glVertex2f(x + dx, y + dy)
+        GL.glEnd()
 
     def draw_star(self):
         """Draw a 3D 5-pointed star (star prism) using OpenGL with gradient effect"""
