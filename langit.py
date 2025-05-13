@@ -5,6 +5,8 @@ from PyQt5.QtCore import Qt, QPointF, QRectF, pyqtSignal
 from OpenGL import GL
 import math
 import random
+from PIL import Image
+import os
 
 class SceneGLWidget(QtOpenGL.QGLWidget):
     rotationChanged = pyqtSignal(float, float, float)
@@ -33,6 +35,10 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_animation)
         self.timer.start(16)  # Sekitar 60 FPS
+
+        self.earth_texture = None
+        self.moon_texture = None  # Tambahkan variabel untuk tekstur bulan
+
     def set_scene(self, scene_name):
         """Set the current scene to draw"""
         self.current_scene = scene_name
@@ -55,7 +61,52 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
     def initializeGL(self):
         GL.glEnable(GL.GL_DEPTH_TEST)
+        GL.glEnable(GL.GL_TEXTURE_2D)
         GL.glClearColor(0.1, 0.1, 0.1, 1.0)
+        
+        # Setup lighting
+        GL.glEnable(GL.GL_LIGHTING)
+        GL.glEnable(GL.GL_LIGHT0)
+        GL.glEnable(GL.GL_COLOR_MATERIAL)
+        
+        # Set light position and properties
+        GL.glLight(GL.GL_LIGHT0, GL.GL_POSITION, (5.0, 5.0, 5.0, 1.0))
+        GL.glLight(GL.GL_LIGHT0, GL.GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
+        GL.glLight(GL.GL_LIGHT0, GL.GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
+        
+        # Load earth texture
+        self.earth_texture = self.load_texture("textures/earth.png")
+        self.moon_texture = self.load_texture("textures/moon.png")  # Load tekstur bulan
+
+    def load_texture(self, image_path):
+        """Load texture from image file"""
+        try:
+            # Buka gambar menggunakan PIL
+            image = Image.open(image_path)
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+            img_data = image.convert("RGBA").tobytes()
+            
+            # Generate texture ID
+            texture_id = GL.glGenTextures(1)
+            
+            # Bind dan set parameter tekstur
+            GL.glBindTexture(GL.GL_TEXTURE_2D, texture_id)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_REPEAT)
+            
+            # Upload tekstur
+            GL.glTexImage2D(
+                GL.GL_TEXTURE_2D, 0, GL.GL_RGBA,
+                image.width, image.height,
+                0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, img_data
+            )
+            
+            return texture_id
+        except Exception as e:
+            print(f"Error loading texture: {e}")
+            return None
 
     def resizeGL(self, w, h):
         GL.glViewport(0, 0, w, h)
@@ -66,8 +117,11 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glMatrixMode(GL.GL_MODELVIEW)
 
     def paintGL(self):
+        # Reset state OpenGL
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         GL.glLoadIdentity()
+        GL.glDisable(GL.GL_TEXTURE_2D)  # Disable texture by default
+        GL.glColor3f(1.0, 1.0, 1.0)     # Reset color to white
         
         # Apply transformations
         GL.glTranslatef(self.translation_x, self.translation_y, 0)
@@ -78,21 +132,35 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         # Draw based on current scene
         if self.current_scene == 'lightning':
+            GL.glDisable(GL.GL_LIGHTING)  # Disable lighting for 2D objects
             self.draw_lightning()
         elif self.current_scene == 'cloud':
+            GL.glDisable(GL.GL_LIGHTING)
             self.draw_cloud()
         elif self.current_scene == 'star':
+            GL.glEnable(GL.GL_LIGHTING)   # Enable lighting for 3D objects
             self.draw_star()
         elif self.current_scene == 'saturn':
+            GL.glEnable(GL.GL_LIGHTING)
             self.draw_saturn()
         elif self.current_scene == 'rainbow':
+            GL.glDisable(GL.GL_LIGHTING)
             self.draw_rainbow()
         elif self.current_scene == 'rocket':
+            GL.glDisable(GL.GL_LIGHTING)
             self.draw_rocket()
         elif self.current_scene == 'earth':
+            GL.glEnable(GL.GL_LIGHTING)
+            GL.glEnable(GL.GL_TEXTURE_2D)
             self.draw_earth()
+            GL.glDisable(GL.GL_TEXTURE_2D)  # Disable texture after drawing earth
         elif self.current_scene == 'moon':
+            GL.glEnable(GL.GL_LIGHTING)
             self.draw_moon()
+
+        # Reset states after drawing
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        GL.glDisable(GL.GL_LIGHTING)
 
     # Mouse interaction methods
     def mousePressEvent(self, event):
@@ -439,12 +507,104 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
         GL.glEnd()
         
-    # def draw_earth(self):
+    def draw_earth(self):
+        """Draw textured Earth sphere"""
+        if self.earth_texture is None:
+            return
+            
+        GL.glPushMatrix()
+        GL.glEnable(GL.GL_TEXTURE_2D)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.earth_texture)
         
-    #     GL.glEnd()
-    # def draw_moon(self):
+        radius = 1.0
+        stacks = 32
+        slices = 32
         
-    #     GL.glEnd()
+        for i in range(stacks):
+            lat0 = math.pi * (-0.5 + float(i) / stacks)
+            lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
+            
+            GL.glBegin(GL.GL_QUAD_STRIP)
+            for j in range(slices + 1):
+                lng = 2 * math.pi * float(j - 1) / slices
+                
+                # Koordinat tekstur
+                s = float(j) / slices
+                t1 = float(i) / stacks
+                t2 = float(i + 1) / stacks
+                
+                # Vertex pertama
+                x = math.cos(lng) * math.cos(lat0)
+                y = math.sin(lng) * math.cos(lat0)
+                z = math.sin(lat0)
+                GL.glTexCoord2f(s, t1)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
+                # Vertex kedua
+                x = math.cos(lng) * math.cos(lat1)
+                y = math.sin(lng) * math.cos(lat1)
+                z = math.sin(lat1)
+                GL.glTexCoord2f(s, t2)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
+            GL.glEnd()
+        
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        GL.glPopMatrix()
+
+    def draw_moon(self):
+        """Draw textured Moon sphere"""
+        if self.moon_texture is None:
+            return
+            
+        GL.glPushMatrix()
+        GL.glEnable(GL.GL_TEXTURE_2D)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.moon_texture)
+        
+        # Ukuran bulan sedikit lebih kecil dari bumi
+        radius = 0.8
+        stacks = 32
+        slices = 32
+        
+        # Material properties untuk bulan
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+        GL.glMaterialf(GL.GL_FRONT, GL.GL_SHININESS, 5.0)
+        
+        for i in range(stacks):
+            lat0 = math.pi * (-0.5 + float(i) / stacks)
+            lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
+            
+            GL.glBegin(GL.GL_QUAD_STRIP)
+            for j in range(slices + 1):
+                lng = 2 * math.pi * float(j - 1) / slices
+                
+                # Koordinat tekstur
+                s = float(j) / slices
+                t1 = float(i) / stacks
+                t2 = float(i + 1) / stacks
+                
+                # Calculate normals for better lighting
+                x = math.cos(lng) * math.cos(lat0)
+                y = math.sin(lng) * math.cos(lat0)
+                z = math.sin(lat0)
+                GL.glNormal3f(x, y, z)
+                GL.glTexCoord2f(s, t1)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
+                x = math.cos(lng) * math.cos(lat1)
+                y = math.sin(lng) * math.cos(lat1)
+                z = math.sin(lat1)
+                GL.glNormal3f(x, y, z)
+                GL.glTexCoord2f(s, t2)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
+            GL.glEnd()
+        
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        GL.glPopMatrix()
+
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
