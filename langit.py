@@ -37,7 +37,9 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.timer.start(16)  # Sekitar 60 FPS
 
         self.earth_texture = None
-        self.moon_texture = None  # Tambahkan variabel untuk tekstur bulan
+        self.moon_texture = None
+        self.saturn_texture = None
+        self.saturn_ring_texture = None  # Tambahkan variabel untuk tekstur cincin
 
     def set_scene(self, scene_name):
         """Set the current scene to draw"""
@@ -76,7 +78,9 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         # Load earth texture
         self.earth_texture = self.load_texture("textures/earth.png")
-        self.moon_texture = self.load_texture("textures/moon.png")  # Load tekstur bulan
+        self.moon_texture = self.load_texture("textures/moon.png")
+        self.saturn_texture = self.load_texture("textures/saturn.png")
+        self.saturn_ring_texture = self.load_texture("textures/saturn.png")  # Load tekstur cincin
 
     def load_texture(self, image_path):
         """Load texture from image file"""
@@ -457,55 +461,158 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glEnd()
 
     def draw_saturn(self):
-        # Gambar bola untuk Saturnus
-        GL.glColor3f(0.8, 0.7, 0.5)
-        self.draw_sphere(0.9, 30, 30)
-
-        # Gambar cincin
-        GL.glColor3f(0.6, 0.6, 0.6)
-        self.draw_ring(1.1, 1.6, 100)
-
-    def draw_sphere(self, radius, slices, stacks):
+        """Draw textured Saturn with rings"""
+        if self.saturn_texture is None:
+            return
+            
+        GL.glPushMatrix()
+        
+        # Gambar bola Saturnus dengan tekstur
+        GL.glEnable(GL.GL_TEXTURE_2D)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.saturn_texture)
+        
+        radius = 0.9
+        stacks = 32
+        slices = 32
+        
+        # Material properties untuk Saturnus
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+        GL.glMaterialf(GL.GL_FRONT, GL.GL_SHININESS, 5.0)
+        
         for i in range(stacks):
             lat0 = math.pi * (-0.5 + float(i) / stacks)
             lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
-            z0 = radius * math.sin(lat0)
-            zr0 = radius * math.cos(lat0)
-            z1 = radius * math.sin(lat1)
-            zr1 = radius * math.cos(lat1)
-
+            
             GL.glBegin(GL.GL_QUAD_STRIP)
             for j in range(slices + 1):
-                lng = 2 * math.pi * float(j) / slices
-                x = math.cos(lng)
-                y = math.sin(lng)
-
-                # Gradient based on latitude
-                GL.glColor3f(0.8 - 0.3 * i / stacks, 0.7 - 0.2 * i / stacks, 0.5)
-                GL.glVertex3f(x * zr0, y * zr0, z0)
-
-                GL.glColor3f(0.8 - 0.3 * (i+1) / stacks, 0.7 - 0.2 * (i+1) / stacks, 0.5)
-                GL.glVertex3f(x * zr1, y * zr1, z1)
+                lng = 2 * math.pi * float(j - 1) / slices
+                
+                # Koordinat tekstur
+                s = float(j) / slices
+                t1 = float(i) / stacks
+                t2 = float(i + 1) / stacks
+                
+                # Vertex pertama
+                x = math.cos(lng) * math.cos(lat0)
+                y = math.sin(lng) * math.cos(lat0)
+                z = math.sin(lat0)
+                GL.glNormal3f(x, y, z)
+                GL.glTexCoord2f(s, t1)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
+                # Vertex kedua
+                x = math.cos(lng) * math.cos(lat1)
+                y = math.sin(lng) * math.cos(lat1)
+                z = math.sin(lat1)
+                GL.glNormal3f(x, y, z)
+                GL.glTexCoord2f(s, t2)
+                GL.glVertex3f(x * radius, y * radius, z * radius)
+                
             GL.glEnd()
+        
+        GL.glDisable(GL.GL_TEXTURE_2D)
+        
+        # Gambar cincin
+        GL.glColor3f(0.6, 0.6, 0.6)
+        self.draw_ring(1.1, 1.6, 100)
+        
+        GL.glPopMatrix()
 
     def draw_ring(self, inner_radius, outer_radius, segments):
-        thickness = 0.1 # Ketebalan cincin
+        """Draw Saturn's ring with texture"""
+        if self.saturn_ring_texture is None:
+            return
+        
+        thickness = 0.1  # Ketebalan cincin
+        
+        GL.glEnable(GL.GL_TEXTURE_2D)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.saturn_ring_texture)
+        
+        # Material properties untuk cincin
+        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
+        GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+        GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 50.0)
 
         GL.glBegin(GL.GL_QUAD_STRIP)
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
-            x = math.cos(theta)*1.2
-            y = math.sin(theta)*0.7
-
-            # Menggambar bagian bawah cincin (z = -thickness/2)
+            x = math.cos(theta) * 1.2
+            y = math.sin(theta) * 0.7
+            
+            # Koordinat tekstur
+            tex_s = float(i) / segments
+            
+            # Normal vector untuk pencahayaan yang lebih baik
+            GL.glNormal3f(0, 0, 1)
+            
+            # Bagian dalam cincin
+            GL.glTexCoord2f(tex_s, 0.0)
             GL.glVertex3f(x * inner_radius, y * inner_radius, -thickness / 2)
+            
+            # Bagian luar cincin
+            GL.glTexCoord2f(tex_s, 1.0)
             GL.glVertex3f(x * outer_radius, y * outer_radius, -thickness / 2)
-
-            # Menggambar bagian atas cincin (z = +thickness/2)
-            GL.glVertex3f(x * inner_radius, y * inner_radius, thickness / 2)
-            GL.glVertex3f(x * outer_radius, y * outer_radius, thickness / 2)
-
+            
         GL.glEnd()
+        
+        # Gambar sisi belakang cincin
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            theta = 2.0 * math.pi * i / segments
+            x = math.cos(theta) * 1.2
+            y = math.sin(theta) * 0.7
+            
+            tex_s = float(i) / segments
+            GL.glNormal3f(0, 0, -1)
+            
+            # Bagian luar cincin
+            GL.glTexCoord2f(tex_s, 1.0)
+            GL.glVertex3f(x * outer_radius, y * outer_radius, thickness / 2)
+            
+            # Bagian dalam cincin
+            GL.glTexCoord2f(tex_s, 0.0)
+            GL.glVertex3f(x * inner_radius, y * inner_radius, thickness / 2)
+            
+        GL.glEnd()
+        
+        # Gambar sisi tepi cincin
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            theta = 2.0 * math.pi * i / segments
+            x = math.cos(theta) * 1.2
+            y = math.sin(theta) * 0.7
+            
+            tex_s = float(i) / segments
+            
+            # Tepi luar
+            GL.glTexCoord2f(tex_s, 0.0)
+            GL.glVertex3f(x * outer_radius, y * outer_radius, -thickness / 2)
+            GL.glTexCoord2f(tex_s, 1.0)
+            GL.glVertex3f(x * outer_radius, y * outer_radius, thickness / 2)
+            
+        GL.glEnd()
+        
+        # Gambar sisi tepi dalam
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            theta = 2.0 * math.pi * i / segments
+            x = math.cos(theta) * 1.2
+            y = math.sin(theta) * 0.7
+            
+            tex_s = float(i) / segments
+            
+            # Tepi dalam
+            GL.glTexCoord2f(tex_s, 1.0)
+            GL.glVertex3f(x * inner_radius, y * inner_radius, thickness / 2)
+            GL.glTexCoord2f(tex_s, 0.0)
+            GL.glVertex3f(x * inner_radius, y * inner_radius, -thickness / 2)
+            
+        GL.glEnd()
+        
+        GL.glDisable(GL.GL_TEXTURE_2D)
         
     def draw_earth(self):
         """Draw textured Earth sphere"""
