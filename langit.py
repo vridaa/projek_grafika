@@ -709,57 +709,115 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glPopMatrix()
 
     def draw_moon(self):
-        """Draw textured Moon sphere"""
+        """Draw moon shaped like a 3D crescent moon"""
         if self.moon_texture is None:
             return
             
         GL.glPushMatrix()
+        
+        # Enable texture and set material properties
         GL.glEnable(GL.GL_TEXTURE_2D)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.moon_texture)
         
-        # Ukuran bulan sedikit lebih kecil dari bumi
-        radius = 0.8
-        stacks = 32
-        slices = 32
-        
-        # Material properties untuk bulan
+        # Material properties for moon
         GL.glMaterialfv(GL.GL_FRONT, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
         GL.glMaterialfv(GL.GL_FRONT, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
         GL.glMaterialfv(GL.GL_FRONT, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
         GL.glMaterialf(GL.GL_FRONT, GL.GL_SHININESS, 5.0)
         
-        for i in range(stacks):
-            lat0 = math.pi * (-0.5 + float(i) / stacks)
-            lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
-            
-            GL.glBegin(GL.GL_QUAD_STRIP)
-            for j in range(slices + 1):
-                lng = 2 * math.pi * float(j - 1) / slices
-                
-                # Koordinat tekstur
-                s = float(j) / slices
-                t1 = float(i) / stacks
-                t2 = float(i + 1) / stacks
-                
-                # Calculate normals for better lighting
-                x = math.cos(lng) * math.cos(lat0)
-                y = math.sin(lng) * math.cos(lat0)
-                z = math.sin(lat0)
-                GL.glNormal3f(x, y, z)
-                GL.glTexCoord2f(s, t1)
-                GL.glVertex3f(x * radius, y * radius, z * radius)
-                
-                x = math.cos(lng) * math.cos(lat1)
-                y = math.sin(lng) * math.cos(lat1)
-                z = math.sin(lat1)
-                GL.glNormal3f(x, y, z)
-                GL.glTexCoord2f(s, t2)
-                GL.glVertex3f(x * radius, y * radius, z * radius)
-                
-            GL.glEnd()
+        # Rotate to better view the crescent shape
+        GL.glRotatef(30, 1, 0, 0)  # Tilt forward
+        GL.glRotatef(20, 0, 1, 0)  # Rotate around y-axis
+        
+        # Draw the crescent shape
+        self.draw_c_shape(0.8, 0.3, 36)
         
         GL.glDisable(GL.GL_TEXTURE_2D)
         GL.glPopMatrix()
+
+    def draw_c_shape(self, radius, thickness, segments):
+        """
+        Draw a 3D crescent moon shape (true crescent, not just a C)
+        - radius: outer radius of the crescent
+        - thickness: maximum thickness in the middle of the crescent
+        - segments: number of segments for circular parts
+        """
+        # Crescent parameters
+        start_angle = math.radians(45)
+        end_angle = math.radians(315)
+        height = thickness
+        angle_step = (end_angle - start_angle) / segments
+
+        # Crescent offset (controls how much the inner circle is shifted)
+        offset = radius * 0.45  # 0.4~0.5 gives a nice crescent
+
+        # Draw outer surface (outer arc)
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            angle = start_angle + i * angle_step
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            s = float(i) / segments
+
+            # Outer arc (front)
+            GL.glNormal3f(cos_a, sin_a, 0)
+            GL.glTexCoord2f(s, 0)
+            GL.glVertex3f(radius * cos_a, radius * sin_a, -height/2)
+            GL.glTexCoord2f(s, 1)
+            GL.glVertex3f(radius * cos_a, radius * sin_a, height/2)
+        GL.glEnd()
+
+        # Draw inner surface (inner arc, shifted to create crescent)
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            angle = start_angle + i * angle_step
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            s = float(i) / segments
+
+            # Inner arc (front, shifted)
+            GL.glNormal3f(-cos_a, -sin_a, 0)
+            GL.glTexCoord2f(s, 0)
+            GL.glVertex3f((radius - thickness) * cos_a + offset, (radius - thickness) * sin_a, -height/2)
+            GL.glTexCoord2f(s, 1)
+            GL.glVertex3f((radius - thickness) * cos_a + offset, (radius - thickness) * sin_a, height/2)
+        GL.glEnd()
+
+        # Draw top face (between outer and inner arcs)
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            angle = start_angle + i * angle_step
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            s = float(i) / segments
+
+            # Top face
+            GL.glNormal3f(0, 0, 1)
+            # Inner (shifted)
+            GL.glTexCoord2f(s, 0)
+            GL.glVertex3f((radius - thickness) * cos_a + offset, (radius - thickness) * sin_a, height/2)
+            # Outer
+            GL.glTexCoord2f(s, 1)
+            GL.glVertex3f(radius * cos_a, radius * sin_a, height/2)
+        GL.glEnd()
+
+        # Draw bottom face (between outer and inner arcs)
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(segments + 1):
+            angle = start_angle + i * angle_step
+            cos_a = math.cos(angle)
+            sin_a = math.sin(angle)
+            s = float(i) / segments
+
+            # Bottom face
+            GL.glNormal3f(0, 0, -1)
+            # Outer
+            GL.glTexCoord2f(s, 1)
+            GL.glVertex3f(radius * cos_a, radius * sin_a, -height/2)
+            # Inner (shifted)
+            GL.glTexCoord2f(s, 0)
+            GL.glVertex3f((radius - thickness) * cos_a + offset, (radius - thickness) * sin_a, -height/2)
+        GL.glEnd()
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
