@@ -288,6 +288,22 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.scaleChanged.emit(self.scale)
         self.update()
 
+    def reset_transformations(self):
+        """Reset all transformations to default values"""
+        self.rotation_x = 0
+        self.rotation_y = 0
+        self.rotation_z = 0
+        self.translation_x = 0
+        self.translation_y = 0
+        self.scale = 1.0
+        
+        # Emit signals to update UI
+        self.rotationChanged.emit(0, 0, 0)
+        self.translationChanged.emit(0, 0)
+        self.scaleChanged.emit(1.0)
+        
+        self.update()
+
     # Drawing methods (keep your existing draw methods here)
     # ... (draw_lightning, draw_cloud, etc.)
 
@@ -969,6 +985,11 @@ class Ui_MainWindow(object):
         self.rotasi_z_layout.addWidget(self.view_rotasi_z)
         self.left_panel.addWidget(self.rotasi_z_groupbox)
         
+        # Reset button
+        self.reset_button = QtWidgets.QPushButton("Reset Transformasi")
+        self.reset_button.setStyleSheet("background-color: rgb(255, 200, 200);")
+        self.left_panel.addWidget(self.reset_button)
+        
         # Add stretch and complete layout
         self.left_panel.addStretch()
         self.content_layout.addLayout(self.left_panel)
@@ -1008,10 +1029,23 @@ class Ui_MainWindow(object):
         # Scale control
         self.view_skala.clicked.connect(lambda: self.glWidget.set_scale(self.skala.value()))
         
+        # Reset transformations
+        self.reset_button.clicked.connect(self.reset_all_transformations)
+        
         # Connect signals from GLWidget to update UI
         self.glWidget.rotationChanged.connect(self.update_rotation_ui)
         self.glWidget.translationChanged.connect(self.update_translation_ui)
         self.glWidget.scaleChanged.connect(self.update_scale_ui)
+
+    def reset_all_transformations(self):
+        """Reset all transformations and update UI"""
+        self.glWidget.reset_transformations()
+        
+        # Reset UI controls
+        self.rotasi_x.setValue(0)
+        self.rotasi_y.setValue(0)
+        self.rotasi_z.setValue(0)
+        self.skala.setValue(1.0)
 
     def update_rotation_ui(self, x, y, z):
         self.rotasi_x.setValue(x)
