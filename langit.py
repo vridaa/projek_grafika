@@ -2,7 +2,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets, QtOpenGL
 from PyQt5.QtCore import Qt, QPointF, QRectF, pyqtSignal
-from OpenGL import GL
+from OpenGL import GL,GLU
 import math
 import random
 from PIL import Image
@@ -12,6 +12,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     rotationChanged = pyqtSignal(float, float, float)
     translationChanged = pyqtSignal(float, float)
     scaleChanged = pyqtSignal(float)
+    colorChanged = pyqtSignal(float, float, float)
 
     def __init__(self, parent=None):
         super(SceneGLWidget, self).__init__(parent)
@@ -24,6 +25,14 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.scale = 1.0
         self.translation_x = 0
         self.translation_y = 0
+        
+        self.object_color = {
+            'lightning': (1.0, 1.0, 0.0),  # Yellow
+            'cloud': (1.0, 1.0, 1.0),     # White
+            'rainbow': None,               # Rainbow has multiple colors
+            'rocket': (0.8, 0.8, 0.8),               # Rocket has multiple parts with different colors
+        }
+        self.current_color = (1.0, 1.0, 1.0)
 
         # Mouse interaction variables
         self.last_pos = QtCore.QPoint()
@@ -54,6 +63,14 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.rotation_y = 0
             self.rotation_z = 0
         self.update()
+        
+    def set_object_color(self, r, g, b):
+        """Set color for the current 2D object"""
+        if self.current_scene in ['lightning', 'cloud', 'rocket']:  # Only for objects that support color change
+            self.object_color[self.current_scene] = (r, g, b)
+            self.current_color = (r, g, b)
+            self.colorChanged.emit(r, g, b)
+            self.update()
 
     def update_animation(self):
         if self.current_scene in ['saturn', 'star', 'earth', 'moon']:
@@ -77,7 +94,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glLight(GL.GL_LIGHT0, GL.GL_AMBIENT, (0.2, 0.2, 0.2, 1.0))
         GL.glLight(GL.GL_LIGHT0, GL.GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
         
-        # Load texture
+        # Load earth texture
         self.earth_texture = self.load_texture("textures/earth.png")
         self.moon_texture = self.load_texture("textures/moon.png")
         self.saturn_texture = self.load_texture("textures/saturn.png")
@@ -193,8 +210,17 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.update()
             
         if self.is_panning:
-            self.translation_x += dx * self.pan_speed
-            self.translation_y -= dy * self.pan_speed  # Invert y-axis
+            width = self.width()
+            height = self.height()
+            aspect = width / height if height != 0 else 1
+            
+            new_x = self.translation_x + dx * self.pan_speed
+            new_y = self.translation_y - dy * self.pan_speed  # Invert y-axis
+            
+            # Batasi translasi
+            self.translation_x = max(-2 * aspect, min(2 * aspect, new_x))
+            self.translation_y = max(-2.0, min(2.0, new_y))
+            
             self.translationChanged.emit(self.translation_x, self.translation_y)
             self.update()
             
@@ -203,9 +229,9 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     def wheelEvent(self, event):
         zoom_factor = 1.1
         if event.angleDelta().y() > 0:
-            self.scale *= zoom_factor
+            self.scale = min(2.0, self.scale * zoom_factor)  # Batas maksimal 2.0
         else:
-            self.scale /= zoom_factor
+            self.scale = max(0.1, self.scale / zoom_factor)  # Batas minimal 0.1
         self.scaleChanged.emit(self.scale)
         self.update()
 
@@ -215,6 +241,11 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         scale_step = 0.1     # Jumlah perubahan untuk scaling
         translation_step = 0.1  # Jumlah perubahan untuk translasi
         
+        # Get window dimensions
+        width = self.width()
+        height = self.height()
+        aspect = width / height if height != 0 else 1
+            
         # Rotation controls
         if event.key() == Qt.Key_Left:
             self.rotation_y = (self.rotation_y - rotation_step) % 360
@@ -242,21 +273,35 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.scale = max(0.1, self.scale - scale_step)
             self.scaleChanged.emit(self.scale)
         # Translation controls
+        # Translation controls
         elif event.key() == Qt.Key_A:  # Move left
-            self.translation_x -= translation_step
+            self.translation_x = max(-2 * aspect, self.translation_x - translation_step)
             self.translationChanged.emit(self.translation_x, self.translation_y)
         elif event.key() == Qt.Key_D:  # Move right
-            self.translation_x += translation_step
+            self.translation_x = min(2 * aspect, self.translation_x + translation_step)
             self.translationChanged.emit(self.translation_x, self.translation_y)
         elif event.key() == Qt.Key_W:  # Move up
-            self.translation_y += translation_step
+            self.translation_y = min(2.0, self.translation_y + translation_step)
             self.translationChanged.emit(self.translation_x, self.translation_y)
         elif event.key() == Qt.Key_S:  # Move down
-            self.translation_y -= translation_step
+            self.translation_y = max(-2.0, self.translation_y - translation_step)
             self.translationChanged.emit(self.translation_x, self.translation_y)
-        
-        self.update()
-
+            self.update()
+    def reset_transformations(self):
+            """Reset all transformations to default values"""
+            self.rotation_x = 0
+            self.rotation_y = 0
+            self.rotation_z = 0
+            self.translation_x = 0
+            self.translation_y = 0
+            self.scale = 1.0
+            
+            # Emit signals to update UI
+            self.rotationChanged.emit(0, 0, 0)
+            self.translationChanged.emit(0, 0)
+            self.scaleChanged.emit(1.0)
+            
+            self.update()
     # Transformation methods
     def set_rotation_x(self, angle):
         self.rotation_x = angle
@@ -274,43 +319,27 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.update()
 
     def set_translation_x(self, x):
-        self.translation_x = x
+        width = self.width()
+        height = self.height()
+        aspect = width / height if height != 0 else 1
+        self.translation_x = max(-2 * aspect, min(2 * aspect, x))
         self.translationChanged.emit(self.translation_x, self.translation_y)
         self.update()
 
     def set_translation_y(self, y):
-        self.translation_y = y
+        self.translation_y = max(-2.0, min(2.0, y))
         self.translationChanged.emit(self.translation_x, self.translation_y)
         self.update()
 
     def set_scale(self, scale):
-        self.scale = scale
+        self.scale = max(0.1, min(2.0, scale))
         self.scaleChanged.emit(self.scale)
         self.update()
 
-    def reset_transformations(self):
-        """Reset all transformations to default values"""
-        self.rotation_x = 0
-        self.rotation_y = 0
-        self.rotation_z = 0
-        self.translation_x = 0
-        self.translation_y = 0
-        self.scale = 1.0
-        
-        # Emit signals to update UI
-        self.rotationChanged.emit(0, 0, 0)
-        self.translationChanged.emit(0, 0)
-        self.scaleChanged.emit(1.0)
-        
-        self.update()
-
-    # Drawing methods (keep your existing draw methods here)
-    # ... (draw_lightning, draw_cloud, etc.)
-
     def draw_lightning(self):
         GL.glLineWidth(6.0)
-        GL.glColor3f(1.0, 1.0, 0.0)  # Yellow color
-
+        color = self.object_color.get('lightning', (1.0, 1.0, 0.0))
+        GL.glColor3f(*color)
         GL.glBegin(GL.GL_LINE_STRIP)
 
         # Zigzag shape mimicking a ⚡ lightning bolt
@@ -328,8 +357,8 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
     def draw_cloud(self):
         """Draw cloud using OpenGL circles"""
-        GL.glColor3f(1.0, 1.0, 1.0)  # White color
-        
+        color = self.object_color.get('cloud', (1.0, 1.0, 1.0))
+        GL.glColor3f(*color)
         # Cloud parts with different positions and sizes
         cloud_parts = [
             (-0.6, 0, 0.5, 0.5),
@@ -398,9 +427,11 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
     def draw_rocket(self):
         """Draw a 2D rocket using OpenGL primitives"""
+        body_color = self.object_color.get('rocket', (0.8, 0.8, 0.8))
+        
         # Badan roket (trapesium)
         GL.glBegin(GL.GL_POLYGON)
-        GL.glColor3f(0.8, 0.8, 0.8)  # Light gray
+        GL.glColor3f(*body_color)  # Use the selected color
         GL.glVertex2f(-0.1, -0.5)   # Kiri bawah
         GL.glVertex2f(0.1, -0.5)    # Kanan bawah
         GL.glVertex2f(0.2, 0.3)     # Kanan atas
@@ -536,7 +567,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glEnable(GL.GL_TEXTURE_2D)
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.saturn_texture)
         
-        radius = 0.91
+        radius = 0.9
         stacks = 32
         slices = 32
         
@@ -605,7 +636,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
             x = math.cos(theta) * 1.2
-            y = math.sin(theta) * 0.9
+            y = math.sin(theta) * 0.7
             
             # Koordinat tekstur
             tex_s = float(i) / segments
@@ -628,7 +659,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
             x = math.cos(theta) * 1.2
-            y = math.sin(theta) * 0.9
+            y = math.sin(theta) * 0.7
             
             tex_s = float(i) / segments
             GL.glNormal3f(0, 0, -1)
@@ -648,7 +679,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
             x = math.cos(theta) * 1.2
-            y = math.sin(theta) * 0.9
+            y = math.sin(theta) * 0.7
             
             tex_s = float(i) / segments
             
@@ -665,7 +696,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
             x = math.cos(theta) * 1.2
-            y = math.sin(theta) * 0.9
+            y = math.sin(theta) * 0.7
             
             tex_s = float(i) / segments
             
@@ -985,6 +1016,22 @@ class Ui_MainWindow(object):
         self.rotasi_z_layout.addWidget(self.view_rotasi_z)
         self.left_panel.addWidget(self.rotasi_z_groupbox)
         
+        # Color Picker for 2D Objects
+        self.color_groupbox = QtWidgets.QGroupBox("Warna Objek 2D")
+        self.color_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
+        self.color_layout = QtWidgets.QHBoxLayout(self.color_groupbox)
+        
+        self.color_button = QtWidgets.QPushButton("Pilih Warna")
+        self.color_button.setStyleSheet("background-color: rgb(200, 200, 255);")
+        self.color_demo = QtWidgets.QFrame()
+        self.color_demo.setStyleSheet("background-color: rgb(255, 255, 255);")
+        self.color_demo.setFixedSize(50, 30)
+        
+        self.color_layout.addWidget(self.color_button)
+        self.color_layout.addWidget(self.color_demo)
+        self.left_panel.addWidget(self.color_groupbox)
+        
+        
         # Reset button
         self.reset_button = QtWidgets.QPushButton("Reset Transformasi")
         self.reset_button.setStyleSheet("background-color: rgb(255, 200, 200);")
@@ -1029,14 +1076,20 @@ class Ui_MainWindow(object):
         # Scale control
         self.view_skala.clicked.connect(lambda: self.glWidget.set_scale(self.skala.value()))
         
+        
         # Reset transformations
         self.reset_button.clicked.connect(self.reset_all_transformations)
+        
+        # Color picker
+        self.color_button.clicked.connect(self.pick_color)
         
         # Connect signals from GLWidget to update UI
         self.glWidget.rotationChanged.connect(self.update_rotation_ui)
         self.glWidget.translationChanged.connect(self.update_translation_ui)
         self.glWidget.scaleChanged.connect(self.update_scale_ui)
-
+        self.glWidget.colorChanged.connect(self.update_color_demo)
+    
+    
     def reset_all_transformations(self):
         """Reset all transformations and update UI"""
         self.glWidget.reset_transformations()
@@ -1046,6 +1099,17 @@ class Ui_MainWindow(object):
         self.rotasi_y.setValue(0)
         self.rotasi_z.setValue(0)
         self.skala.setValue(1.0)
+        
+    def pick_color(self):
+        """Open color dialog and set color for current 2D object"""
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            r, g, b, _ = color.getRgbF()
+            self.glWidget.set_object_color(r, g, b)
+
+    def update_color_demo(self, r, g, b):
+        """Update color demo frame with current color"""
+        self.color_demo.setStyleSheet(f"background-color: rgb({int(r*255)}, {int(g*255)}, {int(b*255)});")
 
     def update_rotation_ui(self, x, y, z):
         self.rotasi_x.setValue(x)
