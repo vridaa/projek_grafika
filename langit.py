@@ -14,17 +14,21 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     scaleChanged = pyqtSignal(float)
     colorChanged = pyqtSignal(float, float, float)
 
+
     def __init__(self, parent=None):
         super(SceneGLWidget, self).__init__(parent)
         self.setMinimumSize(400, 400)
         self.setFocusPolicy(Qt.StrongFocus)  # Enable keyboard focus
         self.current_scene = 'none'
-        self.rotation_x = 0  # Rotasi X
-        self.rotation_y = 0  # Rotasi Y
-        self.rotation_z = 0  # Rotasi Z
-        self.scale = 1.0
         self.translation_x = 0
         self.translation_y = 0
+        self.rotation_x = 0
+        self.rotation_y = 0
+        self.rotation_z = 0
+        self.translation_x = 0
+        self.translation_y = 0
+        self.scale = 1.0
+        
         
         self.object_color = {
             'lightning': (1.0, 1.0, 0.0),  # Yellow
@@ -50,6 +54,8 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.moon_texture = None
         self.saturn_texture = None
         self.saturn_ring_texture = None  # Tambahkan variabel untuk tekstur cincin
+        
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def set_scene(self, scene_name):
         """Set the current scene to draw"""
@@ -206,6 +212,8 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         if self.is_rotating:
             self.rotation_x = (self.rotation_x + dy * self.rotation_speed) % 360
             self.rotation_y = (self.rotation_y + dx * self.rotation_speed) % 360
+            
+            # Memberikan feedback melalui signal
             self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
             self.update()
             
@@ -215,7 +223,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             aspect = width / height if height != 0 else 1
             
             new_x = self.translation_x + dx * self.pan_speed
-            new_y = self.translation_y - dy * self.pan_speed  # Invert y-axis
+            new_y = self.translation_y - dy * self.pan_speed  # Invert y-axis untuk intuisi natural
             
             # Batasi translasi
             self.translation_x = max(-2 * aspect, min(2 * aspect, new_x))
@@ -237,71 +245,74 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
     def keyPressEvent(self, event):
         """Handle keyboard input for rotation, scaling, and translation"""
-        rotation_step = 5.0  # Jumlah derajat untuk setiap rotasi
-        scale_step = 0.1     # Jumlah perubahan untuk scaling
-        translation_step = 0.1  # Jumlah perubahan untuk translasi
+        rotation_step = 5.0
+        scale_step = 0.1
+        translation_step = 0.1
         
         # Get window dimensions
         width = self.width()
         height = self.height()
         aspect = width / height if height != 0 else 1
             
+        # Reset transformation
+        if event.key() == Qt.Key_R:
+            self.reset_transformations()
+            return
+        
         # Rotation controls
-        if event.key() == Qt.Key_Left:
+        elif event.key() == Qt.Key_Left:
             self.rotation_y = (self.rotation_y - rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         elif event.key() == Qt.Key_Right:
             self.rotation_y = (self.rotation_y + rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         elif event.key() == Qt.Key_Up:
             self.rotation_x = (self.rotation_x - rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         elif event.key() == Qt.Key_Down:
             self.rotation_x = (self.rotation_x + rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         elif event.key() == Qt.Key_Q:
             self.rotation_z = (self.rotation_z - rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         elif event.key() == Qt.Key_E:
             self.rotation_z = (self.rotation_z + rotation_step) % 360
-            self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+            
         # Scaling controls
-        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:  # Zoom in
+        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:
             self.scale = min(2.0, self.scale + scale_step)
-            self.scaleChanged.emit(self.scale)
-        elif event.key() == Qt.Key_Minus:  # Zoom out
+        elif event.key() == Qt.Key_Minus:
             self.scale = max(0.1, self.scale - scale_step)
-            self.scaleChanged.emit(self.scale)
+            
         # Translation controls
-        # Translation controls
-        elif event.key() == Qt.Key_A:  # Move left
+        elif event.key() == Qt.Key_A:
             self.translation_x = max(-2 * aspect, self.translation_x - translation_step)
-            self.translationChanged.emit(self.translation_x, self.translation_y)
-        elif event.key() == Qt.Key_D:  # Move right
+        elif event.key() == Qt.Key_D:
             self.translation_x = min(2 * aspect, self.translation_x + translation_step)
-            self.translationChanged.emit(self.translation_x, self.translation_y)
-        elif event.key() == Qt.Key_W:  # Move up
+        elif event.key() == Qt.Key_W:
             self.translation_y = min(2.0, self.translation_y + translation_step)
-            self.translationChanged.emit(self.translation_x, self.translation_y)
-        elif event.key() == Qt.Key_S:  # Move down
+        elif event.key() == Qt.Key_S:
             self.translation_y = max(-2.0, self.translation_y - translation_step)
-            self.translationChanged.emit(self.translation_x, self.translation_y)
-            self.update()
+        else:
+            super().keyPressEvent(event)
+            return
+        
+        # Update signals and redraw
+        self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
+        self.translationChanged.emit(self.translation_x, self.translation_y)
+        self.scaleChanged.emit(self.scale)
+        self.update()
+    
     def reset_transformations(self):
-            """Reset all transformations to default values"""
-            self.rotation_x = 0
-            self.rotation_y = 0
-            self.rotation_z = 0
-            self.translation_x = 0
-            self.translation_y = 0
-            self.scale = 1.0
-            
-            # Emit signals to update UI
-            self.rotationChanged.emit(0, 0, 0)
-            self.translationChanged.emit(0, 0)
-            self.scaleChanged.emit(1.0)
-            
-            self.update()
+        """Reset all transformations to default values"""
+        self.rotation_x = 0
+        self.rotation_y = 0
+        self.rotation_z = 0
+        self.translation_x = 0
+        self.translation_y = 0
+        self.scale = 1.0
+        
+        # Emit signals to update UI
+        self.rotationChanged.emit(0, 0, 0)
+        self.translationChanged.emit(0, 0)
+        self.scaleChanged.emit(1.0)
+        
+        self.update()
     # Transformation methods
     def set_rotation_x(self, angle):
         self.rotation_x = angle
@@ -495,67 +506,152 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             dy = radius * math.sin(theta)
             GL.glVertex2f(x + dx, y + dy)
         GL.glEnd()
-
     def draw_star(self):
-        """Draw a 3D 5-pointed star (star prism) using OpenGL with gradient effect"""
+        """Draw a 3D star with better depth and symmetry"""
         outer_radius = 1.0
         inner_radius = 0.4
-        depth = 0.2  # Thickness of the star
+        depth = 0.3
 
-        front_face = []
-        back_face = []
-
+        # Create 10 points for star outline (alternating outer and inner)
+        points = []
         for i in range(10):
-            angle = 2 * math.pi * i / 10 - math.pi / 2
-            radius = inner_radius if i % 2 else outer_radius
+            angle = math.radians(i * 36)  # 360/10 = 36 degrees per point
+            radius = outer_radius if i % 2 == 0 else inner_radius
             x = radius * math.cos(angle)
             y = radius * math.sin(angle)
-            front_face.append((x, y, depth / 2))
-            back_face.append((x, y, -depth / 2))
 
-        # Front face with gradient
-        GL.glBegin(GL.GL_TRIANGLE_FAN)
-        GL.glColor3f(1.0, 0.84, 0.0)  # center (gold)
-        GL.glVertex3f(0, 0, depth / 2)
-        for i, v in enumerate(front_face + [front_face[0]]):
-            if i % 2 == 0:
-                GL.glColor3f(1.0, 0.7, 0.0)  # outer points - deeper gold
-            else:
-                GL.glColor3f(1.0, 0.9, 0.4)  # inner points - lighter
-            GL.glVertex3f(*v)
-        GL.glEnd()
+            # Give subtle 3D contour using sine wave pattern
+            z = math.sin(i * math.pi / 5) * (depth * 0.2)
+            points.append((x, y, z))
 
-        # Back face with reversed gradient
+        # --- Front face ---
         GL.glBegin(GL.GL_TRIANGLE_FAN)
         GL.glColor3f(1.0, 0.84, 0.0)
-        GL.glVertex3f(0, 0, -depth / 2)
-        for i, v in enumerate(back_face + [back_face[0]]):
+        GL.glVertex3f(0, 0, depth)  # Center raised
+        for i, (x, y, z) in enumerate(points + [points[0]]):
             if i % 2 == 0:
                 GL.glColor3f(1.0, 0.7, 0.0)
             else:
                 GL.glColor3f(1.0, 0.9, 0.4)
-            GL.glVertex3f(*v)
+            GL.glVertex3f(x, y, z + depth * 0.1)
         GL.glEnd()
 
-        # Sides with gradient
-        GL.glBegin(GL.GL_QUADS)
-        for i in range(10):
-            next_i = (i + 1) % 10
-            v1 = front_face[i]
-            v2 = front_face[next_i]
-            v3 = back_face[next_i]
-            v4 = back_face[i]
-
-            GL.glColor3f(1.0, 0.7 + 0.03 * i, 0.0)
-            GL.glVertex3f(*v1)
-            GL.glColor3f(1.0, 0.7 + 0.03 * i, 0.2)
-            GL.glVertex3f(*v2)
-            GL.glColor3f(1.0, 0.7 + 0.03 * i, 0.2)
-            GL.glVertex3f(*v3)
-            GL.glColor3f(1.0, 0.7 + 0.03 * i, 0.0)
-            GL.glVertex3f(*v4)
+        # --- Back face ---
+        GL.glBegin(GL.GL_TRIANGLE_FAN)
+        GL.glColor3f(1.0, 0.84, 0.0)
+        GL.glVertex3f(0, 0, -depth)
+        for i, (x, y, z) in enumerate(reversed(points + [points[-1]])):
+            if i % 2 == 0:
+                GL.glColor3f(1.0, 0.5, 0.0)
+            else:
+                GL.glColor3f(1.0, 0.8, 0.3)
+            GL.glVertex3f(x, y, -z - depth * 0.1)
         GL.glEnd()
 
+        # --- Sides ---
+        GL.glBegin(GL.GL_QUAD_STRIP)
+        for i in range(len(points) + 1):
+            idx = i % len(points)
+            x, y, z = points[idx]
+            zf = z + depth * 0.1
+            zb = -z - depth * 0.1
+
+            color_factor = i / len(points)
+            GL.glColor3f(1.0, 0.6 + 0.3 * color_factor, 0.2)
+            GL.glVertex3f(x, y, zf)
+            GL.glColor3f(1.0, 0.5 + 0.3 * color_factor, 0.0)
+            GL.glVertex3f(x, y, zb)
+        GL.glEnd()
+
+
+    def draw_cone(self, base, direction, radius, length, color):
+        """Helper function to draw a simple cone"""
+        GL.glPushMatrix()
+        GL.glTranslatef(*base)
+
+        dir_len = math.sqrt(sum(d**2 for d in direction))
+        if dir_len == 0:
+            dir_len = 1e-5  # avoid division by zero
+
+        ax, ay, az = 0, 0, 1
+        dx, dy, dz = [d / dir_len for d in direction]
+
+        rx = ay * dz - az * dy
+        ry = az * dx - ax * dz
+        rz = ax * dy - ay * dx
+        angle_rad = math.acos(dz)
+        angle_deg = math.degrees(angle_rad)
+
+        if rx != 0 or ry != 0 or rz != 0:
+            GL.glRotatef(angle_deg, rx, ry, rz)
+
+        GL.glColor3f(*color)
+        quadric = GLU.gluNewQuadric()
+        GLU.gluCylinder(quadric, radius, 0.0, length, 10, 1)
+        GLU.gluDeleteQuadric(quadric)
+
+        GL.glPopMatrix()
+
+
+        def draw_saturn(self):
+            """Draw textured Saturn with rings"""
+            if self.saturn_texture is None:
+                return
+                
+            GL.glPushMatrix()
+            
+            # Gambar bola Saturnus dengan tekstur
+            GL.glEnable(GL.GL_TEXTURE_2D)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.saturn_texture)
+            
+            radius = 0.9
+            stacks = 32
+            slices = 32
+            
+            # Material properties untuk Saturnus
+            GL.glMaterialfv(GL.GL_FRONT, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
+            GL.glMaterialfv(GL.GL_FRONT, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
+            GL.glMaterialfv(GL.GL_FRONT, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
+            GL.glMaterialf(GL.GL_FRONT, GL.GL_SHININESS, 5.0)
+            
+            for i in range(stacks):
+                lat0 = math.pi * (-0.5 + float(i) / stacks)
+                lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
+                
+                GL.glBegin(GL.GL_QUAD_STRIP)
+                for j in range(slices + 1):
+                    lng = 2 * math.pi * float(j - 1) / slices
+                    
+                    # Koordinat tekstur
+                    s = float(j) / slices
+                    t1 = float(i) / stacks
+                    t2 = float(i + 1) / stacks
+                    
+                    # Vertex pertama
+                    x = math.cos(lng) * math.cos(lat0)
+                    y = math.sin(lng) * math.cos(lat0)
+                    z = math.sin(lat0)
+                    GL.glNormal3f(x, y, z)
+                    GL.glTexCoord2f(s, t1)
+                    GL.glVertex3f(x * radius, y * radius, z * radius)
+                    
+                    # Vertex kedua
+                    x = math.cos(lng) * math.cos(lat1)
+                    y = math.sin(lng) * math.cos(lat1)
+                    z = math.sin(lat1)
+                    GL.glNormal3f(x, y, z)
+                    GL.glTexCoord2f(s, t2)
+                    GL.glVertex3f(x * radius, y * radius, z * radius)
+                    
+                GL.glEnd()
+            
+            GL.glDisable(GL.GL_TEXTURE_2D)
+            
+            # Gambar cincin
+            GL.glColor3f(0.6, 0.6, 0.6)
+            self.draw_ring(1.1, 1.6, 100)
+            
+            GL.glPopMatrix()
     def draw_saturn(self):
         """Draw textured Saturn with rings"""
         if self.saturn_texture is None:
@@ -939,43 +1035,16 @@ class Ui_MainWindow(object):
         self.left_panel_3d.addWidget(self.moon, 1, 1)
         
         self.left_panel.addWidget(self.groupBox_objek3d)
+         # Tambahkan Tab Control untuk transformasi yang lebih jelas
+        self.transform_tabs = QtWidgets.QTabWidget()
+        self.transform_tabs.setStyleSheet("background-color: rgb(255, 255, 255);")
         
-        # Translation Control
-        self.groupBox_translasi = QtWidgets.QGroupBox("Translasi")
-        self.groupBox_translasi.setStyleSheet("background-color: rgb(255, 255, 255);")
-        self.left_panel_translasi = QtWidgets.QGridLayout(self.groupBox_translasi)
+        # === Tab Rotasi ===
+        self.rotation_tab = QtWidgets.QWidget()
+        self.rotation_layout = QtWidgets.QVBoxLayout(self.rotation_tab)
         
-        self.kiri = QtWidgets.QPushButton("Kiri")
-        self.kanan = QtWidgets.QPushButton("Kanan")
-        self.atas = QtWidgets.QPushButton("Atas")
-        self.bawah = QtWidgets.QPushButton("Bawah")
-        
-        self.left_panel_translasi.addWidget(self.atas, 0, 1)
-        self.left_panel_translasi.addWidget(self.kiri, 1, 0)
-        self.left_panel_translasi.addWidget(self.kanan, 1, 2)
-        self.left_panel_translasi.addWidget(self.bawah, 2, 1)
-        
-        self.left_panel.addWidget(self.groupBox_translasi)
-        
-        # Scaling Control
-        self.skala_groupbox = QtWidgets.QGroupBox("Skala")
-        self.skala_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
-        self.skala_layout = QtWidgets.QHBoxLayout(self.skala_groupbox)
-
-        self.skala = QtWidgets.QDoubleSpinBox()
-        self.skala.setRange(0.1, 2.0)
-        self.skala.setSingleStep(0.1)
-        self.skala.setValue(1.0)
-        self.view_skala = QtWidgets.QPushButton("View")
-
-        self.skala_layout.addWidget(self.skala)
-        self.skala_layout.addWidget(self.view_skala)
-
-        self.left_panel.addWidget(self.skala_groupbox)
-
-        # Rotation Control
+        # Rotasi X
         self.rotasi_x_groupbox = QtWidgets.QGroupBox("Rotasi X")
-        self.rotasi_x_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.rotasi_x_layout = QtWidgets.QHBoxLayout(self.rotasi_x_groupbox)
         
         self.rotasi_x = QtWidgets.QDoubleSpinBox()
@@ -986,10 +1055,10 @@ class Ui_MainWindow(object):
         
         self.rotasi_x_layout.addWidget(self.rotasi_x)
         self.rotasi_x_layout.addWidget(self.view_rotasi_x)
-        self.left_panel.addWidget(self.rotasi_x_groupbox)
+        self.rotation_layout.addWidget(self.rotasi_x_groupbox)
         
+        # Rotasi Y
         self.rotasi_y_groupbox = QtWidgets.QGroupBox("Rotasi Y")
-        self.rotasi_y_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.rotasi_y_layout = QtWidgets.QHBoxLayout(self.rotasi_y_groupbox)
         
         self.rotasi_y = QtWidgets.QDoubleSpinBox()
@@ -1000,10 +1069,10 @@ class Ui_MainWindow(object):
         
         self.rotasi_y_layout.addWidget(self.rotasi_y)
         self.rotasi_y_layout.addWidget(self.view_rotasi_y)
-        self.left_panel.addWidget(self.rotasi_y_groupbox)
+        self.rotation_layout.addWidget(self.rotasi_y_groupbox)
         
+        # Rotasi Z
         self.rotasi_z_groupbox = QtWidgets.QGroupBox("Rotasi Z")
-        self.rotasi_z_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
         self.rotasi_z_layout = QtWidgets.QHBoxLayout(self.rotasi_z_groupbox)
         
         self.rotasi_z = QtWidgets.QDoubleSpinBox()
@@ -1014,7 +1083,100 @@ class Ui_MainWindow(object):
         
         self.rotasi_z_layout.addWidget(self.rotasi_z)
         self.rotasi_z_layout.addWidget(self.view_rotasi_z)
-        self.left_panel.addWidget(self.rotasi_z_groupbox)
+        self.rotation_layout.addWidget(self.rotasi_z_groupbox)
+        
+        # Tombol-tombol cepat untuk rotasi
+        self.rotation_buttons = QtWidgets.QGridLayout()
+        self.rot_x_plus = QtWidgets.QPushButton("X+")
+        self.rot_x_minus = QtWidgets.QPushButton("X-")
+        self.rot_y_plus = QtWidgets.QPushButton("Y+")
+        self.rot_y_minus = QtWidgets.QPushButton("Y-")
+        self.rot_z_plus = QtWidgets.QPushButton("Z+")
+        self.rot_z_minus = QtWidgets.QPushButton("Z-")
+        
+        self.rotation_buttons.addWidget(self.rot_x_plus, 0, 0)
+        self.rotation_buttons.addWidget(self.rot_x_minus, 0, 1)
+        self.rotation_buttons.addWidget(self.rot_y_plus, 1, 0)
+        self.rotation_buttons.addWidget(self.rot_y_minus, 1, 1)
+        self.rotation_buttons.addWidget(self.rot_z_plus, 2, 0)
+        self.rotation_buttons.addWidget(self.rot_z_minus, 2, 1)
+        
+        self.rotation_layout.addLayout(self.rotation_buttons)
+        self.transform_tabs.addTab(self.rotation_tab, "Rotasi")
+        
+        # === Tab Translasi ===
+        self.translation_tab = QtWidgets.QWidget()
+        self.translation_layout = QtWidgets.QVBoxLayout(self.translation_tab)
+        
+        # Tombol arah translasi
+        self.trans_groupbox = QtWidgets.QGroupBox("Arah Translasi")
+        self.trans_layout = QtWidgets.QGridLayout(self.trans_groupbox)
+        
+        self.kiri = QtWidgets.QPushButton("Kiri")
+        self.kanan = QtWidgets.QPushButton("Kanan")
+        self.atas = QtWidgets.QPushButton("Atas")
+        self.bawah = QtWidgets.QPushButton("Bawah")
+        
+        self.trans_layout.addWidget(self.atas, 0, 1)
+        self.trans_layout.addWidget(self.kiri, 1, 0)
+        self.trans_layout.addWidget(self.kanan, 1, 2)
+        self.trans_layout.addWidget(self.bawah, 2, 1)
+        
+        self.translation_layout.addWidget(self.trans_groupbox)
+        self.transform_tabs.addTab(self.translation_tab, "Translasi")
+        
+        # === Tab Skala ===
+        self.scale_tab = QtWidgets.QWidget()
+        self.scale_layout = QtWidgets.QVBoxLayout(self.scale_tab)
+        
+        # Skala Uniform
+        self.skala_groupbox = QtWidgets.QGroupBox("Skala Uniform")
+        self.skala_uni_layout = QtWidgets.QHBoxLayout(self.skala_groupbox)
+
+        self.skala = QtWidgets.QDoubleSpinBox()
+        self.skala.setRange(0.1, 2.0)
+        self.skala.setSingleStep(0.1)
+        self.skala.setValue(1.0)
+        self.view_skala = QtWidgets.QPushButton("Apply")
+
+        self.skala_uni_layout.addWidget(self.skala)
+        self.skala_uni_layout.addWidget(self.view_skala)
+        self.scale_layout.addWidget(self.skala_groupbox)
+        
+        # Tombol cepat untuk skala
+        self.scale_buttons = QtWidgets.QHBoxLayout()
+        self.scale_up = QtWidgets.QPushButton("Perbesar")
+        self.scale_down = QtWidgets.QPushButton("Perkecil")
+        self.scale_reset = QtWidgets.QPushButton("Reset (1.0)")
+        
+        self.scale_buttons.addWidget(self.scale_up)
+        self.scale_buttons.addWidget(self.scale_down)
+        self.scale_buttons.addWidget(self.scale_reset)
+        
+        self.scale_layout.addLayout(self.scale_buttons)
+        self.transform_tabs.addTab(self.scale_tab, "Skala")
+        
+        # Tambahkan tab transformasi ke tata letak utama
+        self.left_panel.addWidget(self.transform_tabs)
+        
+        # Tambahkan keyboard shortcut help
+        self.shortcut_groupbox = QtWidgets.QGroupBox("Keyboard Shortcuts")
+        self.shortcut_groupbox.setMaximumHeight(150)
+        self.shortcut_groupbox.setStyleSheet("background-color: rgb(255, 255, 255);")
+        self.shortcut_layout = QtWidgets.QVBoxLayout(self.shortcut_groupbox)
+        
+        self.shortcut_info = QtWidgets.QTextEdit()
+        self.shortcut_info.setReadOnly(True)
+        self.shortcut_info.setHtml("""
+        <p><b>Rotasi:</b> Arrow Keys, Q/E (Z axis), X, Y, Z keys</p>
+        <p><b>Translasi:</b> W, A, S, D keys</p>
+        <p><b>Skala:</b> +/- keys</p>
+        <p><b>Reset:</b> R key</p>
+        <p><b>Modifiers:</b> Ctrl+Arrows for zoom, Alt+X/Y/Z for reverse rotation</p>
+        """)
+        
+        self.shortcut_layout.addWidget(self.shortcut_info)
+        self.left_panel.addWidget(self.shortcut_groupbox)
         
         # Color Picker for 2D Objects
         self.color_groupbox = QtWidgets.QGroupBox("Warna Objek 2D")
@@ -1073,9 +1235,19 @@ class Ui_MainWindow(object):
         self.view_rotasi_y.clicked.connect(lambda: self.glWidget.set_rotation_y(self.rotasi_y.value()))
         self.view_rotasi_z.clicked.connect(lambda: self.glWidget.set_rotation_z(self.rotasi_z.value()))
         
+        # Quick rotation buttons
+        self.rot_x_plus.clicked.connect(lambda: self.glWidget.set_rotation_x(self.glWidget.rotation_x + 5))
+        self.rot_x_minus.clicked.connect(lambda: self.glWidget.set_rotation_x(self.glWidget.rotation_x - 5))
+        self.rot_y_plus.clicked.connect(lambda: self.glWidget.set_rotation_y(self.glWidget.rotation_y + 5))
+        self.rot_y_minus.clicked.connect(lambda: self.glWidget.set_rotation_y(self.glWidget.rotation_y - 5))
+        self.rot_z_plus.clicked.connect(lambda: self.glWidget.set_rotation_z(self.glWidget.rotation_z + 5))
+        self.rot_z_minus.clicked.connect(lambda: self.glWidget.set_rotation_z(self.glWidget.rotation_z - 5))
+        
         # Scale control
         self.view_skala.clicked.connect(lambda: self.glWidget.set_scale(self.skala.value()))
-        
+        self.scale_up.clicked.connect(lambda: self.glWidget.set_scale(min(2.0, self.glWidget.scale + 0.1)))
+        self.scale_down.clicked.connect(lambda: self.glWidget.set_scale(max(0.1, self.glWidget.scale - 0.1)))
+        self.scale_reset.clicked.connect(lambda: self.glWidget.set_scale(1.0))
         
         # Reset transformations
         self.reset_button.clicked.connect(self.reset_all_transformations)
@@ -1088,7 +1260,38 @@ class Ui_MainWindow(object):
         self.glWidget.translationChanged.connect(self.update_translation_ui)
         self.glWidget.scaleChanged.connect(self.update_scale_ui)
         self.glWidget.colorChanged.connect(self.update_color_demo)
-    
+        
+        # Pastikan widget OpenGL memiliki fokus untuk input keyboard
+        # Set focus policy and focus
+        self.glWidget.setFocusPolicy(Qt.StrongFocus)
+        self.glWidget.setFocus()
+        
+        # Connect to widget's focusInEvent untuk debugging
+        self.glWidget.focusInEvent = lambda event: print("OpenGL widget has gained focus")
+
+    def update_translation_ui(self, x, y):
+        """Update translation UI widgets with current values"""
+        self.translasi_x.setValue(x)
+        self.translasi_y.setValue(y)
+        
+        # Debugging
+        print(f"Translation updated: x={x}, y={y}")
+
+    # Tambahkan fungsi event filter untuk memastikan widget OpenGL mendapatkan event keyboard
+    def eventFilter(self, obj, event):
+        if obj == self.centralwidget and event.type() == QEvent.KeyPress:
+            # Redirect keyboard events to GLWidget
+            self.glWidget.keyPressEvent(event)
+            return True
+        return super().eventFilter(obj, event)
+
+    # Tambahkan pemasangan event filter pada metode setupUi
+    def add_event_filter(self, MainWindow):
+        # Pasang event filter pada centralwidget
+        self.centralwidget.installEventFilter(self)
+        # Pastikan GLWidget memiliki fokus keyboard
+        self.glWidget.setFocusPolicy(Qt.StrongFocus)
+        self.glWidget.setFocus()
     
     def reset_all_transformations(self):
         """Reset all transformations and update UI"""
@@ -1099,6 +1302,7 @@ class Ui_MainWindow(object):
         self.rotasi_y.setValue(0)
         self.rotasi_z.setValue(0)
         self.skala.setValue(1.0)
+
         
     def pick_color(self):
         """Open color dialog and set color for current 2D object"""
