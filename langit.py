@@ -348,23 +348,47 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.update()
 
     def draw_lightning(self):
-        GL.glLineWidth(6.0)
-        color = self.object_color.get('lightning', (1.0, 1.0, 0.0))
-        GL.glColor3f(*color)
-        GL.glBegin(GL.GL_LINE_STRIP)
-
-        # Zigzag shape mimicking a ⚡ lightning bolt
+        # Draw the filled lightning bolt
+        GL.glColor3f(1.0, 0.9, 0.1)  # Warna kuning terang
+        
+        # Points defining a more classic lightning bolt shape
         points = [
-            (0.0, 0.6),
-            (-0.3, 0.1),
-            (0.0, 0.1),
-            (-0.6, -0.9),
+            (0.0, 1.0),     # Titik atas
+            (-0.2, 0.4),    # Miring ke kiri bawah
+            (0.1, 0.4),     # Sedikit kanan
+            (-0.3, -0.2),   # Miring ke kiri bawah
+            (0.0, -0.2),    # Ke kanan
+            (-0.5, -1.0)    # Ujung bawah
         ]
-
+        
+           # Gambar isi petir
+        GL.glBegin(GL.GL_POLYGON)
         for x, y in points:
             GL.glVertex2f(x, y)
-
         GL.glEnd()
+# Glow yang lebih kompleks
+        glow_layers = [
+            (1.0, 1.0, 0.8, 0.4, 0.05),  # Cahaya terluar, sangat terang, transparan
+            (1.0, 1.0, 0.6, 0.6, 0.03),  # Lapisan kedua
+            (1.0, 0.9, 0.3, 0.8, 0.01)   # Lapisan terdalam, lebih padat
+        ]
+
+        # Aktifkan blending untuk transparansi
+        GL.glEnable(GL.GL_BLEND)
+        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)
+
+        for r, g, b, a, offset in glow_layers:
+            GL.glColor4f(r, g, b, a)
+            # Ketebalan garis bisa diatur agar terlihat seperti "blur"
+            GL.glLineWidth(5.0 * (1.0 - offset)) # Mengatur ketebalan berdasarkan offset
+
+            GL.glBegin(GL.GL_LINE_LOOP)
+            for x, y in points:
+                # Menggeser titik untuk menciptakan efek glow
+                GL.glVertex2f(x * (1.0 + offset), y * (1.0 + offset))
+            GL.glEnd()
+
+        GL.glDisable(GL.GL_BLEND) # Nonaktifkan blending setelah selesai
 
     def draw_cloud(self):
         """Draw cloud using OpenGL circles"""
@@ -506,6 +530,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             dy = radius * math.sin(theta)
             GL.glVertex2f(x + dx, y + dy)
         GL.glEnd()
+
     def draw_star(self):
         """Draw a 3D star with better depth and symmetry"""
         outer_radius = 1.0
@@ -592,66 +617,6 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
         GL.glPopMatrix()
 
-
-        def draw_saturn(self):
-            """Draw textured Saturn with rings"""
-            if self.saturn_texture is None:
-                return
-                
-            GL.glPushMatrix()
-            
-            # Gambar bola Saturnus dengan tekstur
-            GL.glEnable(GL.GL_TEXTURE_2D)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self.saturn_texture)
-            
-            radius = 0.9
-            stacks = 32
-            slices = 32
-            
-            # Material properties untuk Saturnus
-            GL.glMaterialfv(GL.GL_FRONT, GL.GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
-            GL.glMaterialfv(GL.GL_FRONT, GL.GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
-            GL.glMaterialfv(GL.GL_FRONT, GL.GL_SPECULAR, [0.3, 0.3, 0.3, 1.0])
-            GL.glMaterialf(GL.GL_FRONT, GL.GL_SHININESS, 5.0)
-            
-            for i in range(stacks):
-                lat0 = math.pi * (-0.5 + float(i) / stacks)
-                lat1 = math.pi * (-0.5 + float(i + 1) / stacks)
-                
-                GL.glBegin(GL.GL_QUAD_STRIP)
-                for j in range(slices + 1):
-                    lng = 2 * math.pi * float(j - 1) / slices
-                    
-                    # Koordinat tekstur
-                    s = float(j) / slices
-                    t1 = float(i) / stacks
-                    t2 = float(i + 1) / stacks
-                    
-                    # Vertex pertama
-                    x = math.cos(lng) * math.cos(lat0)
-                    y = math.sin(lng) * math.cos(lat0)
-                    z = math.sin(lat0)
-                    GL.glNormal3f(x, y, z)
-                    GL.glTexCoord2f(s, t1)
-                    GL.glVertex3f(x * radius, y * radius, z * radius)
-                    
-                    # Vertex kedua
-                    x = math.cos(lng) * math.cos(lat1)
-                    y = math.sin(lng) * math.cos(lat1)
-                    z = math.sin(lat1)
-                    GL.glNormal3f(x, y, z)
-                    GL.glTexCoord2f(s, t2)
-                    GL.glVertex3f(x * radius, y * radius, z * radius)
-                    
-                GL.glEnd()
-            
-            GL.glDisable(GL.GL_TEXTURE_2D)
-            
-            # Gambar cincin
-            GL.glColor3f(0.6, 0.6, 0.6)
-            self.draw_ring(1.1, 1.6, 100)
-            
-            GL.glPopMatrix()
     def draw_saturn(self):
         """Draw textured Saturn with rings"""
         if self.saturn_texture is None:
@@ -1279,11 +1244,10 @@ class Ui_MainWindow(object):
 
     # Tambahkan fungsi event filter untuk memastikan widget OpenGL mendapatkan event keyboard
     def eventFilter(self, obj, event):
-        if obj == self.centralwidget and event.type() == QEvent.KeyPress:
-            # Redirect keyboard events to GLWidget
+        if event.type() == QtCore.QEvent.KeyPress:
             self.glWidget.keyPressEvent(event)
             return True
-        return super().eventFilter(obj, event)
+        return super(Ui_MainWindow, self).eventFilter(obj, event)
 
     # Tambahkan pemasangan event filter pada metode setupUi
     def add_event_filter(self, MainWindow):
@@ -1339,6 +1303,7 @@ class Ui_MainWindow(object):
         
         # UI translations (keep your existing translations)
         # ...
+    
 
 def main():
     import sys
@@ -1350,4 +1315,4 @@ def main():
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    main()
+    main() 
