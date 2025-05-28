@@ -12,6 +12,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     rotationChanged = pyqtSignal(float, float, float)
     translationChanged = pyqtSignal(float, float)
     scaleChanged = pyqtSignal(float)
+    scale3DChanged = pyqtSignal(float, float, float)  # Tambah sinyal untuk skala 3D
     colorChanged = pyqtSignal(float, float, float)
 
 
@@ -27,6 +28,9 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.rotation_y = 0
         self.rotation_z = 0
         self.scale = 1.0
+        self.scale_x = 1.0  # Skala sumbu X
+        self.scale_y = 1.0  # Skala sumbu Y
+        self.scale_z = 1.0  # Skala sumbu Z
         
         
         self.object_color = {
@@ -155,7 +159,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glRotatef(self.rotation_x, 1, 0, 0)
         GL.glRotatef(self.rotation_y, 0, 1, 0)
         GL.glRotatef(self.rotation_z, 0, 0, 1)
-        GL.glScalef(self.scale, self.scale, 1)
+        GL.glScalef(self.scale_x * self.scale, self.scale_y * self.scale, self.scale_z * self.scale)  # Skala 3D
         
         # Draw based on current scene
         if self.current_scene == 'lightning':
@@ -246,6 +250,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         """Handle keyboard input for rotation, scaling, and translation"""
         rotation_step = 5.0
         scale_step = 0.1
+        scale3d_step = 0.1  # Step untuk skala 3D
         translation_step = 0.1
         translation_z_step = 0.1  # Tambah step Z
         
@@ -278,30 +283,30 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.scale = min(2.0, self.scale + scale_step)
         elif event.key() == Qt.Key_Minus:
             self.scale = max(0.1, self.scale - scale_step)
-            
-        # Translation controls
-        elif event.key() == Qt.Key_A:
-            self.translation_x = max(-2 * aspect, self.translation_x - translation_step)
-        elif event.key() == Qt.Key_D:
-            self.translation_x = min(2 * aspect, self.translation_x + translation_step)
-        elif event.key() == Qt.Key_W:
-            self.translation_y = min(2.0, self.translation_y + translation_step)
-        elif event.key() == Qt.Key_S:
-            self.translation_y = max(-2.0, self.translation_y - translation_step)
-        elif event.key() == Qt.Key_Z:  # Tambah translasi Z maju
-            self.translation_z = min(5.0, self.translation_z + translation_z_step)
-        elif event.key() == Qt.Key_X:  # Tambah translasi Z mundur
-            self.translation_z = max(-5.0, self.translation_z - translation_z_step)
+        # Skala 3D: X/Y/Z (Shift+X/Y/Z untuk sumbu)
+        elif event.key() == Qt.Key_X and event.modifiers() & Qt.ShiftModifier:
+            self.scale_x = min(2.0, self.scale_x + scale3d_step)
+        elif event.key() == Qt.Key_Y and event.modifiers() & Qt.ShiftModifier:
+            self.scale_y = min(2.0, self.scale_y + scale3d_step)
+        elif event.key() == Qt.Key_Z and event.modifiers() & Qt.ShiftModifier:
+            self.scale_z = min(2.0, self.scale_z + scale3d_step)
+        elif event.key() == Qt.Key_X and event.modifiers() & Qt.ControlModifier:
+            self.scale_x = max(0.1, self.scale_x - scale3d_step)
+        elif event.key() == Qt.Key_Y and event.modifiers() & Qt.ControlModifier:
+            self.scale_y = max(0.1, self.scale_y - scale3d_step)
+        elif event.key() == Qt.Key_Z and event.modifiers() & Qt.ControlModifier:
+            self.scale_z = max(0.1, self.scale_z - scale3d_step)
         else:
             super().keyPressEvent(event)
             return
-        
+
         # Update signals and redraw
         self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
         self.translationChanged.emit(self.translation_x, self.translation_y)
         self.scaleChanged.emit(self.scale)
+        self.scale3DChanged.emit(self.scale_x, self.scale_y, self.scale_z)
         self.update()
-    
+
     def reset_transformations(self):
         """Reset all transformations to default values"""
         self.rotation_x = 0
@@ -311,11 +316,15 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.translation_y = 0
         self.translation_z = 0  # Reset Z
         self.scale = 1.0
+        self.scale_x = 1.0
+        self.scale_y = 1.0
+        self.scale_z = 1.0
         
         # Emit signals to update UI
         self.rotationChanged.emit(0, 0, 0)
         self.translationChanged.emit(0, 0)
         self.scaleChanged.emit(1.0)
+        self.scale3DChanged.emit(1.0, 1.0, 1.0)
         
         self.update()
     # Transformation methods
@@ -355,6 +364,21 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
     def set_scale(self, scale):
         self.scale = max(0.1, min(2.0, scale))
         self.scaleChanged.emit(self.scale)
+        self.update()
+
+    def set_scale_x(self, sx):
+        self.scale_x = max(0.1, min(2.0, sx))
+        self.scale3DChanged.emit(self.scale_x, self.scale_y, self.scale_z)
+        self.update()
+
+    def set_scale_y(self, sy):
+        self.scale_y = max(0.1, min(2.0, sy))
+        self.scale3DChanged.emit(self.scale_x, self.scale_y, self.scale_z)
+        self.update()
+
+    def set_scale_z(self, sz):
+        self.scale_z = max(0.1, min(2.0, sz))
+        self.scale3DChanged.emit(self.scale_x, self.scale_y, self.scale_z)
         self.update()
 
     def draw_lightning(self):
