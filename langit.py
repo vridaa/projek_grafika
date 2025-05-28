@@ -22,11 +22,10 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.current_scene = 'none'
         self.translation_x = 0
         self.translation_y = 0
+        self.translation_z = 0  # Tambah translasi Z
         self.rotation_x = 0
         self.rotation_y = 0
         self.rotation_z = 0
-        self.translation_x = 0
-        self.translation_y = 0
         self.scale = 1.0
         
         
@@ -152,7 +151,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glColor3f(1.0, 1.0, 1.0)     # Reset color to white
         
         # Apply transformations
-        GL.glTranslatef(self.translation_x, self.translation_y, 0)
+        GL.glTranslatef(self.translation_x, self.translation_y, self.translation_z)  # Tambah Z
         GL.glRotatef(self.rotation_x, 1, 0, 0)
         GL.glRotatef(self.rotation_y, 0, 1, 0)
         GL.glRotatef(self.rotation_z, 0, 0, 1)
@@ -248,6 +247,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         rotation_step = 5.0
         scale_step = 0.1
         translation_step = 0.1
+        translation_z_step = 0.1  # Tambah step Z
         
         # Get window dimensions
         width = self.width()
@@ -288,6 +288,10 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.translation_y = min(2.0, self.translation_y + translation_step)
         elif event.key() == Qt.Key_S:
             self.translation_y = max(-2.0, self.translation_y - translation_step)
+        elif event.key() == Qt.Key_Z:  # Tambah translasi Z maju
+            self.translation_z = min(5.0, self.translation_z + translation_z_step)
+        elif event.key() == Qt.Key_X:  # Tambah translasi Z mundur
+            self.translation_z = max(-5.0, self.translation_z - translation_z_step)
         else:
             super().keyPressEvent(event)
             return
@@ -305,6 +309,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.rotation_z = 0
         self.translation_x = 0
         self.translation_y = 0
+        self.translation_z = 0  # Reset Z
         self.scale = 1.0
         
         # Emit signals to update UI
@@ -339,6 +344,11 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
 
     def set_translation_y(self, y):
         self.translation_y = max(-2.0, min(2.0, y))
+        self.translationChanged.emit(self.translation_x, self.translation_y)
+        self.update()
+
+    def set_translation_z(self, z):
+        self.translation_z = max(-5.0, min(5.0, z))  # Batas translasi Z
         self.translationChanged.emit(self.translation_x, self.translation_y)
         self.update()
 
@@ -1081,11 +1091,15 @@ class Ui_MainWindow(object):
         self.kanan = QtWidgets.QPushButton("Kanan")
         self.atas = QtWidgets.QPushButton("Atas")
         self.bawah = QtWidgets.QPushButton("Bawah")
+        self.maju = QtWidgets.QPushButton("Maju (Z+)")      # Tambah tombol Z+
+        self.mundur = QtWidgets.QPushButton("Mundur (Z-)")  # Tambah tombol Z-
         
         self.trans_layout.addWidget(self.atas, 0, 1)
         self.trans_layout.addWidget(self.kiri, 1, 0)
         self.trans_layout.addWidget(self.kanan, 1, 2)
         self.trans_layout.addWidget(self.bawah, 2, 1)
+        self.trans_layout.addWidget(self.maju, 0, 2)    # Letak tombol Maju
+        self.trans_layout.addWidget(self.mundur, 2, 2)  # Letak tombol Mundur
         
         self.translation_layout.addWidget(self.trans_groupbox)
         self.transform_tabs.addTab(self.translation_tab, "Translasi")
@@ -1194,6 +1208,8 @@ class Ui_MainWindow(object):
         self.kanan.clicked.connect(lambda: self.glWidget.set_translation_x(self.glWidget.translation_x + 0.1))
         self.atas.clicked.connect(lambda: self.glWidget.set_translation_y(self.glWidget.translation_y + 0.1))
         self.bawah.clicked.connect(lambda: self.glWidget.set_translation_y(self.glWidget.translation_y - 0.1))
+        self.maju.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z + 0.1))      # Z+
+        self.mundur.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z - 0.1))    # Z-
         
         # Rotation controls
         self.view_rotasi_x.clicked.connect(lambda: self.glWidget.set_rotation_x(self.rotasi_x.value()))
@@ -1315,4 +1331,4 @@ def main():
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    main() 
+    main()
