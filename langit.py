@@ -10,7 +10,7 @@ import os
 
 class SceneGLWidget(QtOpenGL.QGLWidget):
     rotationChanged = pyqtSignal(float, float, float)
-    translationChanged = pyqtSignal(float, float)
+    translationChanged = pyqtSignal(float, float, float) # Ubah sinyal untuk menyertakan Z
     scaleChanged = pyqtSignal(float)
     scale3DChanged = pyqtSignal(float, float, float)  # Tambah sinyal untuk skala 3D
     colorChanged = pyqtSignal(float, float, float)
@@ -35,9 +35,9 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         self.object_color = {
             'lightning': (1.0, 1.0, 0.0),  # Yellow
-            'cloud': (1.0, 1.0, 1.0),     # White
+            'cloud': (1.0, 1.0, 1.0),      # White
             'rainbow': None,               # Rainbow has multiple colors
-            'rocket': (0.8, 0.8, 0.8),               # Rocket has multiple parts with different colors
+            'rocket': (0.8, 0.8, 0.8),         # Rocket has multiple parts with different colors
         }
         self.current_color = (1.0, 1.0, 1.0)
 
@@ -104,13 +104,18 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glLight(GL.GL_LIGHT0, GL.GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
         
         # Load earth texture
-        self.earth_texture = self.load_texture("textures/earth.png")
-        self.moon_texture = self.load_texture("textures/moon.png")
-        self.saturn_texture = self.load_texture("textures/saturn.png")
-        self.saturn_ring_texture = self.load_texture("textures/saturn.png")  # Load tekstur cincin
+        # Pastikan Anda memiliki folder 'textures' dengan gambar yang sesuai
+        # Contoh: textures/earth.png, textures/moon.png, textures/saturn.png
+        self.earth_texture = self.load_texture(os.path.join("textures", "earth.png"))
+        self.moon_texture = self.load_texture(os.path.join("textures", "moon.png"))
+        self.saturn_texture = self.load_texture(os.path.join("textures", "saturn.png"))
+        self.saturn_ring_texture = self.load_texture(os.path.join("textures", "saturn.png"))  # Load tekstur cincin
 
     def load_texture(self, image_path):
         """Load texture from image file"""
+        if not os.path.exists(image_path):
+            print(f"Error: Texture file not found at {image_path}")
+            return None
         try:
             # Buka gambar menggunakan PIL
             image = Image.open(image_path)
@@ -136,7 +141,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             
             return texture_id
         except Exception as e:
-            print(f"Error loading texture: {e}")
+            print(f"Error loading texture from {image_path}: {e}")
             return None
 
     def resizeGL(self, w, h):
@@ -144,17 +149,29 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         GL.glMatrixMode(GL.GL_PROJECTION)
         GL.glLoadIdentity()
         aspect = w / h if h != 0 else 1
-        GL.glOrtho(-2 * aspect, 2 * aspect, -2, 2, -10, 10)
+        # Gunakan gluPerspective untuk efek 3D yang lebih baik pada translasi Z
+        GLU.gluPerspective(45, aspect, 0.1, 100.0) # fovy, aspect, zNear, zFar
         GL.glMatrixMode(GL.GL_MODELVIEW)
+        GL.glLoadIdentity()
+        # Set posisi kamera awal (misalnya sedikit menjauh)
+        GLU.gluLookAt(0, 0, 5,  # Posisi kamera (x, y, z)
+                      0, 0, 0,  # Titik yang dilihat kamera (center of scene)
+                      0, 1, 0)  # Vektor 'up'
 
     def paintGL(self):
         # Reset state OpenGL
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
-        GL.glLoadIdentity()
-        GL.glDisable(GL.GL_TEXTURE_2D)  # Disable texture by default
-        GL.glColor3f(1.0, 1.0, 1.0)     # Reset color to white
+        GL.glLoadIdentity() # Reset modelview matrix
+
+        # Set posisi kamera awal (penting untuk perspektif)
+        GLU.gluLookAt(0, 0, 5,  # Posisi kamera (x, y, z)
+                      0, 0, 0,  # Titik yang dilihat kamera (center of scene)
+                      0, 1, 0)  # Vektor 'up'
         
-        # Apply transformations
+        GL.glDisable(GL.GL_TEXTURE_2D)  # Disable texture by default
+        GL.glColor3f(1.0, 1.0, 1.0)      # Reset color to white
+        
+        # Apply transformations (translasi Z akan lebih terlihat dengan gluPerspective)
         GL.glTranslatef(self.translation_x, self.translation_y, self.translation_z)  # Tambah Z
         GL.glRotatef(self.rotation_x, 1, 0, 0)
         GL.glRotatef(self.rotation_y, 0, 1, 0)
@@ -169,7 +186,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             GL.glDisable(GL.GL_LIGHTING)
             self.draw_cloud()
         elif self.current_scene == 'star':
-            GL.glEnable(GL.GL_LIGHTING)   # Enable lighting for 3D objects
+            GL.glEnable(GL.GL_LIGHTING)    # Enable lighting for 3D objects
             self.draw_star()
         elif self.current_scene == 'saturn':
             GL.glEnable(GL.GL_LIGHTING)
@@ -221,49 +238,71 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             self.update()
             
         if self.is_panning:
-            width = self.width()
-            height = self.height()
-            aspect = width / height if height != 0 else 1
+            # Pan (X and Y translation)
+            # Dapatkan matriks proyeksi saat ini untuk menghitung skala per pixel
+            GL.glMatrixMode(GL.GL_PROJECTION)
+            proj_matrix = GL.glGetDoublev(GL.GL_PROJECTION_MATRIX)
+            GL.glMatrixMode(GL.GL_MODELVIEW)
+            
+            # Konversi perubahan pixel ke unit OpenGL
+            # Ini akan lebih kompleks dengan proyeksi perspektif,
+            # untuk kesederhanaan, kita bisa menggunakan pan_speed tetap
             
             new_x = self.translation_x + dx * self.pan_speed
             new_y = self.translation_y - dy * self.pan_speed  # Invert y-axis untuk intuisi natural
             
             # Batasi translasi
-            self.translation_x = max(-2 * aspect, min(2 * aspect, new_x))
-            self.translation_y = max(-2.0, min(2.0, new_y))
+            # Batas ini perlu disesuaikan jika menggunakan gluPerspective
+            self.translation_x = new_x
+            self.translation_y = new_y
             
-            self.translationChanged.emit(self.translation_x, self.translation_y)
+            self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z)
             self.update()
             
         self.last_pos = event.pos()
         
     def wheelEvent(self, event):
         zoom_factor = 1.1
-        if event.angleDelta().y() > 0:
-            self.scale = min(2.0, self.scale * zoom_factor)  # Batas maksimal 2.0
-        else:
-            self.scale = max(0.1, self.scale / zoom_factor)  # Batas minimal 0.1
-        self.scaleChanged.emit(self.scale)
+        # Zooming in/out now affects Z translation (closer/farther)
+        # Instead of scaling the object directly, move the object along Z
+        
+        if event.angleDelta().y() > 0: # Scroll up (zoom in)
+            self.translation_z = max(-10.0, self.translation_z + self.zoom_speed) # Move closer (less negative Z)
+        else: # Scroll down (zoom out)
+            self.translation_z = min(10.0, self.translation_z - self.zoom_speed) # Move farther (more negative Z)
+        
+        self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z)
         self.update()
 
     def keyPressEvent(self, event):
         """Handle keyboard input for rotation, scaling, and translation"""
+        print(f"Key pressed in GLWidget: {event.key()}") # Debugging: cek apakah event diterima
+
         rotation_step = 5.0
         scale_step = 0.1
         scale3d_step = 0.1  # Step untuk skala 3D
         translation_step = 0.1
-        translation_z_step = 0.1  # Tambah step Z
-        
-        # Get window dimensions
-        width = self.width()
-        height = self.height()
-        aspect = width / height if height != 0 else 1
-            
+        translation_z_step = 0.5  # Tambah step Z, nilai lebih besar agar terlihat
+
         # Reset transformation
         if event.key() == Qt.Key_R:
             self.reset_transformations()
             return
         
+        # Translation controls (W, A, S, D, plus Maju/Mundur via Z-axis)
+        elif event.key() == Qt.Key_A: # Kiri
+            self.translation_x -= translation_step
+        elif event.key() == Qt.Key_D: # Kanan
+            self.translation_x += translation_step
+        elif event.key() == Qt.Key_W: # Atas
+            self.translation_y += translation_step
+        elif event.key() == Qt.Key_S: # Bawah
+            self.translation_y -= translation_step
+        elif event.key() == Qt.Key_Plus: # Maju (Z+)
+            self.translation_z += translation_z_step
+        elif event.key() == Qt.Key_Minus: # Mundur (Z-)
+            self.translation_z -= translation_z_step
+            
         # Rotation controls
         elif event.key() == Qt.Key_Left:
             self.rotation_y = (self.rotation_y - rotation_step) % 360
@@ -278,11 +317,15 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         elif event.key() == Qt.Key_E:
             self.rotation_z = (self.rotation_z + rotation_step) % 360
             
-        # Scaling controls
-        elif event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:
+        # Scaling controls (Uniform and 3D)
+        # Tombol '+' dan '-' sudah digunakan untuk Z-translation,
+        # jadi ubah kontrol skala uniform ke tombol lain atau modifikasi.
+        # Misalnya, gunakan Ctrl+Plus/Minus untuk skala uniform.
+        elif event.key() == Qt.Key_Equal and event.modifiers() & Qt.ShiftModifier: # Shift + = (Plus)
             self.scale = min(2.0, self.scale + scale_step)
-        elif event.key() == Qt.Key_Minus:
+        elif event.key() == Qt.Key_Underscore and event.modifiers() & Qt.ShiftModifier: # Shift + - (Minus)
             self.scale = max(0.1, self.scale - scale_step)
+        
         # Skala 3D: X/Y/Z (Shift+X/Y/Z untuk sumbu)
         elif event.key() == Qt.Key_X and event.modifiers() & Qt.ShiftModifier:
             self.scale_x = min(2.0, self.scale_x + scale3d_step)
@@ -297,12 +340,12 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         elif event.key() == Qt.Key_Z and event.modifiers() & Qt.ControlModifier:
             self.scale_z = max(0.1, self.scale_z - scale3d_step)
         else:
-            super().keyPressEvent(event)
+            super().keyPressEvent(event) # Panggil parent method jika tidak ditangani
             return
 
         # Update signals and redraw
         self.rotationChanged.emit(self.rotation_x, self.rotation_y, self.rotation_z)
-        self.translationChanged.emit(self.translation_x, self.translation_y)
+        self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z) # Emit Z
         self.scaleChanged.emit(self.scale)
         self.scale3DChanged.emit(self.scale_x, self.scale_y, self.scale_z)
         self.update()
@@ -322,7 +365,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         # Emit signals to update UI
         self.rotationChanged.emit(0, 0, 0)
-        self.translationChanged.emit(0, 0)
+        self.translationChanged.emit(0, 0, 0) # Emit Z
         self.scaleChanged.emit(1.0)
         self.scale3DChanged.emit(1.0, 1.0, 1.0)
         
@@ -344,21 +387,19 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         self.update()
 
     def set_translation_x(self, x):
-        width = self.width()
-        height = self.height()
-        aspect = width / height if height != 0 else 1
-        self.translation_x = max(-2 * aspect, min(2 * aspect, x))
-        self.translationChanged.emit(self.translation_x, self.translation_y)
+        self.translation_x = x
+        self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z) # Emit Z
         self.update()
 
     def set_translation_y(self, y):
-        self.translation_y = max(-2.0, min(2.0, y))
-        self.translationChanged.emit(self.translation_x, self.translation_y)
+        self.translation_y = y
+        self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z) # Emit Z
         self.update()
 
     def set_translation_z(self, z):
-        self.translation_z = max(-5.0, min(5.0, z))  # Batas translasi Z
-        self.translationChanged.emit(self.translation_x, self.translation_y)
+        # Batas translasi Z, sesuaikan dengan `gluPerspective` zNear dan zFar
+        self.translation_z = max(-90.0, min(90.0, z)) # Sesuaikan rentang ini untuk perspektif
+        self.translationChanged.emit(self.translation_x, self.translation_y, self.translation_z)
         self.update()
 
     def set_scale(self, scale):
@@ -387,15 +428,15 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         
         # Points defining a more classic lightning bolt shape
         points = [
-            (0.0, 1.0),     # Titik atas
-            (-0.2, 0.4),    # Miring ke kiri bawah
-            (0.1, 0.4),     # Sedikit kanan
-            (-0.3, -0.2),   # Miring ke kiri bawah
-            (0.0, -0.2),    # Ke kanan
-            (-0.5, -1.0)    # Ujung bawah
+            (0.0, 1.0),      # Titik atas
+            (-0.2, 0.4),     # Miring ke kiri bawah
+            (0.1, 0.4),      # Sedikit kanan
+            (-0.3, -0.2),    # Miring ke kiri bawah
+            (0.0, -0.2),     # Ke kanan
+            (-0.5, -1.0)     # Ujung bawah
         ]
         
-           # Gambar isi petir
+            # Gambar isi petir
         GL.glBegin(GL.GL_POLYGON)
         for x, y in points:
             GL.glVertex2f(x, y)
@@ -450,7 +491,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         for i in range(segments + 1):
             theta = 2.0 * math.pi * i / segments
             GL.glVertex2f(
-                x + width/2 * math.cos(theta), 
+                x + width/2 * math.cos(theta),  
                 y + height/2 * math.sin(theta)
             )
         
@@ -465,7 +506,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
             (0.0, 1.0, 0.0),  # Green
             (0.0, 0.0, 1.0),  # Blue
             (0.5, 0.0, 1.0),  # Indigo
-            (0.7, 0.0, 1.0)   # Violet
+            (0.7, 0.0, 1.0)    # Violet
         ]
         
         start_radius = 0.5  # Ubah dari 0.3 menjadi 0.5
@@ -501,34 +542,34 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
         # Badan roket (trapesium)
         GL.glBegin(GL.GL_POLYGON)
         GL.glColor3f(*body_color)  # Use the selected color
-        GL.glVertex2f(-0.1, -0.5)   # Kiri bawah
-        GL.glVertex2f(0.1, -0.5)    # Kanan bawah
-        GL.glVertex2f(0.2, 0.3)     # Kanan atas
-        GL.glVertex2f(-0.2, 0.3)    # Kiri atas
+        GL.glVertex2f(-0.1, -0.5)    # Kiri bawah
+        GL.glVertex2f(0.1, -0.5)     # Kanan bawah
+        GL.glVertex2f(0.2, 0.3)      # Kanan atas
+        GL.glVertex2f(-0.2, 0.3)     # Kiri atas
         GL.glEnd()
 
         # Kepala roket (segitiga)
         GL.glBegin(GL.GL_TRIANGLES)
         GL.glColor3f(1.0, 0.0, 0.0)  # Red
-        GL.glVertex2f(-0.2, 0.3)    # Kiri
-        GL.glVertex2f(0.2, 0.3)     # Kanan
-        GL.glVertex2f(0.0, 0.7)     # Puncak
+        GL.glVertex2f(-0.2, 0.3)     # Kiri
+        GL.glVertex2f(0.2, 0.3)      # Kanan
+        GL.glVertex2f(0.0, 0.7)      # Puncak
         GL.glEnd()
 
         # Sayap kiri
         GL.glBegin(GL.GL_TRIANGLES)
         GL.glColor3f(0.6, 0.6, 0.6)  # Dark gray
-        GL.glVertex2f(-0.1, -0.3)   # Atas
-        GL.glVertex2f(-0.1, -0.5)   # Bawah
-        GL.glVertex2f(-0.3, -0.5)   # Ujung sayap
+        GL.glVertex2f(-0.1, -0.3)    # Atas
+        GL.glVertex2f(-0.1, -0.5)    # Bawah
+        GL.glVertex2f(-0.3, -0.5)    # Ujung sayap
         GL.glEnd()
 
         # Sayap kanan
         GL.glBegin(GL.GL_TRIANGLES)
         GL.glColor3f(0.6, 0.6, 0.6)  # Dark gray
-        GL.glVertex2f(0.1, -0.3)    # Atas
-        GL.glVertex2f(0.1, -0.5)    # Bawah
-        GL.glVertex2f(0.3, -0.5)    # Ujung sayap
+        GL.glVertex2f(0.1, -0.3)     # Atas
+        GL.glVertex2f(0.1, -0.5)     # Bawah
+        GL.glVertex2f(0.3, -0.5)     # Ujung sayap
         GL.glEnd()
 
         # Jendela roket (lingkaran)
@@ -835,6 +876,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
                 x = math.cos(lng) * math.cos(lat0)
                 y = math.sin(lng) * math.cos(lat0)
                 z = math.sin(lat0)
+                GL.glNormal3f(x, y, z) # Normal untuk pencahayaan
                 GL.glTexCoord2f(s, t1)
                 GL.glVertex3f(x * radius, y * radius, z * radius)
                 
@@ -842,6 +884,7 @@ class SceneGLWidget(QtOpenGL.QGLWidget):
                 x = math.cos(lng) * math.cos(lat1)
                 y = math.sin(lng) * math.cos(lat1)
                 z = math.sin(lat1)
+                GL.glNormal3f(x, y, z) # Normal untuk pencahayaan
                 GL.glTexCoord2f(s, t2)
                 GL.glVertex3f(x * radius, y * radius, z * radius)
                 
@@ -1034,7 +1077,7 @@ class Ui_MainWindow(object):
         self.left_panel_3d.addWidget(self.moon, 1, 1)
         
         self.left_panel.addWidget(self.groupBox_objek3d)
-         # Tambahkan Tab Control untuk transformasi yang lebih jelas
+          # Tambahkan Tab Control untuk transformasi yang lebih jelas
         self.transform_tabs = QtWidgets.QTabWidget()
         self.transform_tabs.setStyleSheet("background-color: rgb(255, 255, 255);")
         
@@ -1107,16 +1150,46 @@ class Ui_MainWindow(object):
         self.translation_tab = QtWidgets.QWidget()
         self.translation_layout = QtWidgets.QVBoxLayout(self.translation_tab)
         
+        # Translasi X
+        self.translasi_x_groupbox = QtWidgets.QGroupBox("Translasi X")
+        self.translasi_x_layout = QtWidgets.QHBoxLayout(self.translasi_x_groupbox)
+        self.translasi_x = QtWidgets.QDoubleSpinBox()
+        self.translasi_x.setRange(-5.0, 5.0)
+        self.translasi_x.setSingleStep(0.1)
+        self.translasi_x.setValue(0.0)
+        self.translasi_x_layout.addWidget(self.translasi_x)
+        self.translation_layout.addWidget(self.translasi_x_groupbox)
+
+        # Translasi Y
+        self.translasi_y_groupbox = QtWidgets.QGroupBox("Translasi Y")
+        self.translasi_y_layout = QtWidgets.QHBoxLayout(self.translasi_y_groupbox)
+        self.translasi_y = QtWidgets.QDoubleSpinBox()
+        self.translasi_y.setRange(-5.0, 5.0)
+        self.translasi_y.setSingleStep(0.1)
+        self.translasi_y.setValue(0.0)
+        self.translasi_y_layout.addWidget(self.translasi_y)
+        self.translation_layout.addWidget(self.translasi_y_groupbox)
+
+        # Translasi Z (tambahan untuk maju/mundur)
+        self.translasi_z_groupbox = QtWidgets.QGroupBox("Translasi Z")
+        self.translasi_z_layout = QtWidgets.QHBoxLayout(self.translasi_z_groupbox)
+        self.translasi_z = QtWidgets.QDoubleSpinBox()
+        self.translasi_z.setRange(-90.0, 90.0) # Sesuaikan rentang ini dengan gluPerspective
+        self.translasi_z.setSingleStep(0.5) # Sesuaikan step
+        self.translasi_z.setValue(0.0)
+        self.translasi_z_layout.addWidget(self.translasi_z)
+        self.translation_layout.addWidget(self.translasi_z_groupbox)
+
         # Tombol arah translasi
-        self.trans_groupbox = QtWidgets.QGroupBox("Arah Translasi")
+        self.trans_groupbox = QtWidgets.QGroupBox("Arah Translasi Cepat")
         self.trans_layout = QtWidgets.QGridLayout(self.trans_groupbox)
         
-        self.kiri = QtWidgets.QPushButton("Kiri")
-        self.kanan = QtWidgets.QPushButton("Kanan")
-        self.atas = QtWidgets.QPushButton("Atas")
-        self.bawah = QtWidgets.QPushButton("Bawah")
-        self.maju = QtWidgets.QPushButton("Maju (Z+)")      # Tambah tombol Z+
-        self.mundur = QtWidgets.QPushButton("Mundur (Z-)")  # Tambah tombol Z-
+        self.kiri = QtWidgets.QPushButton("Kiri (X-)")
+        self.kanan = QtWidgets.QPushButton("Kanan (X+)")
+        self.atas = QtWidgets.QPushButton("Atas (Y+)")
+        self.bawah = QtWidgets.QPushButton("Bawah (Y-)")
+        self.maju = QtWidgets.QPushButton("Maju (Z+)")       # Tambah tombol Z+
+        self.mundur = QtWidgets.QPushButton("Mundur (Z-)")   # Tambah tombol Z-
         
         self.trans_layout.addWidget(self.atas, 0, 1)
         self.trans_layout.addWidget(self.kiri, 1, 0)
@@ -1146,6 +1219,43 @@ class Ui_MainWindow(object):
         self.skala_uni_layout.addWidget(self.view_skala)
         self.scale_layout.addWidget(self.skala_groupbox)
         
+        # Skala 3D Per Sumbu (baru)
+        self.skala_3d_groupbox = QtWidgets.QGroupBox("Skala Per Sumbu (3D)")
+        self.skala_3d_layout = QtWidgets.QGridLayout(self.skala_3d_groupbox)
+
+        self.label_sx = QtWidgets.QLabel("Skala X:")
+        self.skala_x = QtWidgets.QDoubleSpinBox()
+        self.skala_x.setRange(0.1, 5.0)
+        self.skala_x.setSingleStep(0.1)
+        self.skala_x.setValue(1.0)
+        self.skala_x_apply = QtWidgets.QPushButton("Apply")
+
+        self.label_sy = QtWidgets.QLabel("Skala Y:")
+        self.skala_y = QtWidgets.QDoubleSpinBox()
+        self.skala_y.setRange(0.1, 5.0)
+        self.skala_y.setSingleStep(0.1)
+        self.skala_y.setValue(1.0)
+        self.skala_y_apply = QtWidgets.QPushButton("Apply")
+
+        self.label_sz = QtWidgets.QLabel("Skala Z:")
+        self.skala_z = QtWidgets.QDoubleSpinBox()
+        self.skala_z.setRange(0.1, 5.0)
+        self.skala_z.setSingleStep(0.1)
+        self.skala_z.setValue(1.0)
+        self.skala_z_apply = QtWidgets.QPushButton("Apply")
+
+        self.skala_3d_layout.addWidget(self.label_sx, 0, 0)
+        self.skala_3d_layout.addWidget(self.skala_x, 0, 1)
+        self.skala_3d_layout.addWidget(self.skala_x_apply, 0, 2)
+        self.skala_3d_layout.addWidget(self.label_sy, 1, 0)
+        self.skala_3d_layout.addWidget(self.skala_y, 1, 1)
+        self.skala_3d_layout.addWidget(self.skala_y_apply, 1, 2)
+        self.skala_3d_layout.addWidget(self.label_sz, 2, 0)
+        self.skala_3d_layout.addWidget(self.skala_z, 2, 1)
+        self.skala_3d_layout.addWidget(self.skala_z_apply, 2, 2)
+
+        self.scale_layout.addWidget(self.skala_3d_groupbox)
+
         # Tombol cepat untuk skala
         self.scale_buttons = QtWidgets.QHBoxLayout()
         self.scale_up = QtWidgets.QPushButton("Perbesar")
@@ -1171,11 +1281,11 @@ class Ui_MainWindow(object):
         self.shortcut_info = QtWidgets.QTextEdit()
         self.shortcut_info.setReadOnly(True)
         self.shortcut_info.setHtml("""
-        <p><b>Rotasi:</b> Arrow Keys, Q/E (Z axis), X, Y, Z keys</p>
-        <p><b>Translasi:</b> W, A, S, D keys</p>
-        <p><b>Skala:</b> +/- keys</p>
+        <p><b>Rotasi:</b> Arrow Keys (X/Y), Q/E (Z axis)</p>
+        <p><b>Translasi:</b> W, A, S, D (X/Y), + / - (Z axis)</p>
+        <p><b>Skala:</b> Shift + = (Perbesar), Shift + - (Perkecil)</p>
+        <p><b>Skala Sumbu:</b> Shift + X/Y/Z (Perbesar), Ctrl + X/Y/Z (Perkecil)</p>
         <p><b>Reset:</b> R key</p>
-        <p><b>Modifiers:</b> Ctrl+Arrows for zoom, Alt+X/Y/Z for reverse rotation</p>
         """)
         
         self.shortcut_layout.addWidget(self.shortcut_info)
@@ -1215,6 +1325,9 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
         self.setup_connections()
         self.retranslateUi(MainWindow)
+        
+        # Pastikan GLWidget mendapatkan fokus saat aplikasi dimulai
+        QtCore.QTimer.singleShot(100, self.glWidget.setFocus)
 
     def setup_connections(self):
         # Scene selection
@@ -1227,15 +1340,20 @@ class Ui_MainWindow(object):
         self.earth.clicked.connect(lambda: self.glWidget.set_scene('earth'))
         self.moon.clicked.connect(lambda: self.glWidget.set_scene('moon'))
         
-        # Translation controls
+        # Translation controls (Buttons)
         self.kiri.clicked.connect(lambda: self.glWidget.set_translation_x(self.glWidget.translation_x - 0.1))
         self.kanan.clicked.connect(lambda: self.glWidget.set_translation_x(self.glWidget.translation_x + 0.1))
         self.atas.clicked.connect(lambda: self.glWidget.set_translation_y(self.glWidget.translation_y + 0.1))
         self.bawah.clicked.connect(lambda: self.glWidget.set_translation_y(self.glWidget.translation_y - 0.1))
-        self.maju.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z + 0.1))      # Z+
-        self.mundur.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z - 0.1))    # Z-
+        self.maju.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z + 0.5))    # Z+
+        self.mundur.clicked.connect(lambda: self.glWidget.set_translation_z(self.glWidget.translation_z - 0.5))  # Z-
         
-        # Rotation controls
+        # Translation controls (SpinBoxes)
+        self.translasi_x.valueChanged.connect(self.glWidget.set_translation_x)
+        self.translasi_y.valueChanged.connect(self.glWidget.set_translation_y)
+        self.translasi_z.valueChanged.connect(self.glWidget.set_translation_z)
+
+        # Rotation controls (SpinBoxes)
         self.view_rotasi_x.clicked.connect(lambda: self.glWidget.set_rotation_x(self.rotasi_x.value()))
         self.view_rotasi_y.clicked.connect(lambda: self.glWidget.set_rotation_y(self.rotasi_y.value()))
         self.view_rotasi_z.clicked.connect(lambda: self.glWidget.set_rotation_z(self.rotasi_z.value()))
@@ -1248,11 +1366,16 @@ class Ui_MainWindow(object):
         self.rot_z_plus.clicked.connect(lambda: self.glWidget.set_rotation_z(self.glWidget.rotation_z + 5))
         self.rot_z_minus.clicked.connect(lambda: self.glWidget.set_rotation_z(self.glWidget.rotation_z - 5))
         
-        # Scale control
+        # Scale control (Uniform)
         self.view_skala.clicked.connect(lambda: self.glWidget.set_scale(self.skala.value()))
         self.scale_up.clicked.connect(lambda: self.glWidget.set_scale(min(2.0, self.glWidget.scale + 0.1)))
         self.scale_down.clicked.connect(lambda: self.glWidget.set_scale(max(0.1, self.glWidget.scale - 0.1)))
         self.scale_reset.clicked.connect(lambda: self.glWidget.set_scale(1.0))
+        
+        # Scale 3D controls (Per-axis)
+        self.skala_x_apply.clicked.connect(lambda: self.glWidget.set_scale_x(self.skala_x.value()))
+        self.skala_y_apply.clicked.connect(lambda: self.glWidget.set_scale_y(self.skala_y.value()))
+        self.skala_z_apply.clicked.connect(lambda: self.glWidget.set_scale_z(self.skala_z.value()))
         
         # Reset transformations
         self.reset_button.clicked.connect(self.reset_all_transformations)
@@ -1264,6 +1387,7 @@ class Ui_MainWindow(object):
         self.glWidget.rotationChanged.connect(self.update_rotation_ui)
         self.glWidget.translationChanged.connect(self.update_translation_ui)
         self.glWidget.scaleChanged.connect(self.update_scale_ui)
+        self.glWidget.scale3DChanged.connect(self.update_scale3d_ui) # Connect 3D scale signal
         self.glWidget.colorChanged.connect(self.update_color_demo)
         
         # Pastikan widget OpenGL memiliki fokus untuk input keyboard
@@ -1274,29 +1398,15 @@ class Ui_MainWindow(object):
         # Connect to widget's focusInEvent untuk debugging
         self.glWidget.focusInEvent = lambda event: print("OpenGL widget has gained focus")
 
-    def update_translation_ui(self, x, y):
+    def update_translation_ui(self, x, y, z):
         """Update translation UI widgets with current values"""
         self.translasi_x.setValue(x)
         self.translasi_y.setValue(y)
+        self.translasi_z.setValue(z) # Update Z translation spin box
         
         # Debugging
-        print(f"Translation updated: x={x}, y={y}")
+        print(f"Translation updated: x={x}, y={y}, z={z}")
 
-    # Tambahkan fungsi event filter untuk memastikan widget OpenGL mendapatkan event keyboard
-    def eventFilter(self, obj, event):
-        if event.type() == QtCore.QEvent.KeyPress:
-            self.glWidget.keyPressEvent(event)
-            return True
-        return super(Ui_MainWindow, self).eventFilter(obj, event)
-
-    # Tambahkan pemasangan event filter pada metode setupUi
-    def add_event_filter(self, MainWindow):
-        # Pasang event filter pada centralwidget
-        self.centralwidget.installEventFilter(self)
-        # Pastikan GLWidget memiliki fokus keyboard
-        self.glWidget.setFocusPolicy(Qt.StrongFocus)
-        self.glWidget.setFocus()
-    
     def reset_all_transformations(self):
         """Reset all transformations and update UI"""
         self.glWidget.reset_transformations()
@@ -1305,7 +1415,13 @@ class Ui_MainWindow(object):
         self.rotasi_x.setValue(0)
         self.rotasi_y.setValue(0)
         self.rotasi_z.setValue(0)
+        self.translasi_x.setValue(0)
+        self.translasi_y.setValue(0)
+        self.translasi_z.setValue(0) # Reset Z spin box
         self.skala.setValue(1.0)
+        self.skala_x.setValue(1.0) # Reset 3D scale
+        self.skala_y.setValue(1.0) # Reset 3D scale
+        self.skala_z.setValue(1.0) # Reset 3D scale
 
         
     def pick_color(self):
@@ -1324,11 +1440,13 @@ class Ui_MainWindow(object):
         self.rotasi_y.setValue(y)
         self.rotasi_z.setValue(z)
 
-    def update_translation_ui(self, x, y):
-        pass  # Can add translation display if needed
-
     def update_scale_ui(self, scale):
         self.skala.setValue(scale)
+
+    def update_scale3d_ui(self, sx, sy, sz):
+        self.skala_x.setValue(sx)
+        self.skala_y.setValue(sy)
+        self.skala_z.setValue(sz)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -1341,9 +1459,57 @@ class Ui_MainWindow(object):
             "</style></head><body style=\" font-family:'MS Shell Dlg 2'; font-size:7.875pt; font-weight:400; font-style:normal;\">\n"
             "<p align=\"center\" style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:8pt; font-weight:600; color:#ffffff;\">ATAP LANGIT</span></p></body></html>"))
         
-        # UI translations (keep your existing translations)
-        # ...
-    
+        MainWindow.setWindowTitle(_translate("MainWindow", "OpenGL Viewer"))
+        self.groupBox_objek2d.setTitle(_translate("MainWindow", "Objek 2D"))
+        self.petir.setText(_translate("MainWindow", "Petir"))
+        self.awan.setText(_translate("MainWindow", "Awan"))
+        self.pelangi.setText(_translate("MainWindow", "Pelangi"))
+        self.roket.setText(_translate("MainWindow", "Roket"))
+        self.groupBox_objek3d.setTitle(_translate("MainWindow", "Objek 3D"))
+        self.star.setText(_translate("MainWindow", "Bintang"))
+        self.saturn.setText(_translate("MainWindow", "Saturnus"))
+        self.earth.setText(_translate("MainWindow", "Bumi"))
+        self.moon.setText(_translate("MainWindow", "Bulan"))
+        self.transform_tabs.setTabText(self.transform_tabs.indexOf(self.rotation_tab), _translate("MainWindow", "Rotasi"))
+        self.rotasi_x_groupbox.setTitle(_translate("MainWindow", "Rotasi X"))
+        self.view_rotasi_x.setText(_translate("MainWindow", "Apply"))
+        self.rotasi_y_groupbox.setTitle(_translate("MainWindow", "Rotasi Y"))
+        self.view_rotasi_y.setText(_translate("MainWindow", "Apply"))
+        self.rotasi_z_groupbox.setTitle(_translate("MainWindow", "Rotasi Z"))
+        self.view_rotasi_z.setText(_translate("MainWindow", "Apply"))
+        self.rot_x_plus.setText(_translate("MainWindow", "X+"))
+        self.rot_x_minus.setText(_translate("MainWindow", "X-"))
+        self.rot_y_plus.setText(_translate("MainWindow", "Y+"))
+        self.rot_y_minus.setText(_translate("MainWindow", "Y-"))
+        self.rot_z_plus.setText(_translate("MainWindow", "Z+"))
+        self.rot_z_minus.setText(_translate("MainWindow", "Z-"))
+
+        self.transform_tabs.setTabText(self.transform_tabs.indexOf(self.translation_tab), _translate("MainWindow", "Translasi"))
+        self.translasi_x_groupbox.setTitle(_translate("MainWindow", "Translasi X"))
+        self.translasi_y_groupbox.setTitle(_translate("MainWindow", "Translasi Y"))
+        self.translasi_z_groupbox.setTitle(_translate("MainWindow", "Translasi Z"))
+        self.trans_groupbox.setTitle(_translate("MainWindow", "Arah Translasi Cepat"))
+        self.kiri.setText(_translate("MainWindow", "Kiri (X-)"))
+        self.kanan.setText(_translate("MainWindow", "Kanan (X+)"))
+        self.atas.setText(_translate("MainWindow", "Atas (Y+)"))
+        self.bawah.setText(_translate("MainWindow", "Bawah (Y-)"))
+        self.maju.setText(_translate("MainWindow", "Maju (Z+)"))
+        self.mundur.setText(_translate("MainWindow", "Mundur (Z-)"))
+
+        self.transform_tabs.setTabText(self.transform_tabs.indexOf(self.scale_tab), _translate("MainWindow", "Skala"))
+        self.skala_groupbox.setTitle(_translate("MainWindow", "Skala Uniform"))
+        self.view_skala.setText(_translate("MainWindow", "Apply"))
+        self.skala_3d_groupbox.setTitle(_translate("MainWindow", "Skala Per Sumbu (3D)"))
+        self.skala_x_apply.setText(_translate("MainWindow", "Apply"))
+        self.skala_y_apply.setText(_translate("MainWindow", "Apply"))
+        self.skala_z_apply.setText(_translate("MainWindow", "Apply"))
+        self.scale_up.setText(_translate("MainWindow", "Perbesar"))
+        self.scale_down.setText(_translate("MainWindow", "Perkecil"))
+        self.scale_reset.setText(_translate("MainWindow", "Reset (1.0)"))
+        self.color_groupbox.setTitle(_translate("MainWindow", "Warna Objek 2D"))
+        self.color_button.setText(_translate("MainWindow", "Pilih Warna"))
+        self.reset_button.setText(_translate("MainWindow", "Reset Transformasi"))
+
 
 def main():
     import sys
